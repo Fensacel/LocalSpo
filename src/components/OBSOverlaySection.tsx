@@ -40,10 +40,12 @@ const FONTS = [
 
 export function OBSOverlaySection() {
   const { status, config, loadStatus, toggleServer, updateConfig } = useObsStore();
-  const { currentSong, currentTime, duration } = usePlayerStore();
+  const { currentSong, currentTime, duration, queue, queueIndex } = usePlayerStore();
   const { showToast } = useToastStore();
   const [showQrModal, setShowQrModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'preview' | 'themes' | 'custom' | 'server'>('preview');
+
+  const nextSong = queue && queueIndex >= 0 && queueIndex + 1 < queue.length ? queue[queueIndex + 1] : null;
 
   useEffect(() => {
     loadStatus();
@@ -230,7 +232,7 @@ export function OBSOverlaySection() {
                     : `rgba(18,18,18, ${config.bgOpacity / 100})`,
                 backdropFilter: `blur(${config.bgBlur}px)`,
               }}
-              className={`relative flex items-center gap-4 p-4 min-w-[320px] max-w-[500px] border shadow-2xl transition-all duration-300 ${
+              className={`relative flex flex-col gap-3 p-4 min-w-[320px] max-w-[500px] border shadow-2xl transition-all duration-300 ${
                 config.theme === 'neon'
                   ? 'border-sky-400 shadow-[0_0_20px_rgba(56,189,248,0.4)]'
                   : config.theme === 'rgb'
@@ -238,52 +240,69 @@ export function OBSOverlaySection() {
                   : 'border-white/10'
               }`}
             >
-              {config.showArtwork && (
-                <div
-                  style={{
-                    width: `${config.artworkSize || 54}px`,
-                    height: `${config.artworkSize || 54}px`,
-                    boxShadow: config.artworkGlow ? `0 0 22px ${config.accentColor || '#1db954'}80` : 'none',
-                  }}
-                  className={`relative shrink-0 overflow-hidden bg-white/5 shadow-2xl ${
-                    config.artworkShape === 'circle'
-                      ? 'rounded-full'
-                      : config.artworkShape === 'square'
-                      ? 'rounded-md'
-                      : 'rounded-xl'
-                  }`}
-                >
-                  <img src={coverUrl} alt="" className="w-full h-full object-cover" />
+              <div className="flex items-center gap-4 w-full">
+                {config.showArtwork && (
+                  <div
+                    style={{
+                      width: `${config.artworkSize || 54}px`,
+                      height: `${config.artworkSize || 54}px`,
+                      boxShadow: config.artworkGlow ? `0 0 22px ${config.accentColor || '#1db954'}80` : 'none',
+                    }}
+                    className={`relative shrink-0 overflow-hidden bg-white/5 shadow-2xl ${
+                      config.artworkShape === 'circle'
+                        ? 'rounded-full'
+                        : config.artworkShape === 'square'
+                        ? 'rounded-md'
+                        : 'rounded-xl'
+                    }`}
+                  >
+                    <img src={coverUrl} alt="" className="w-full h-full object-cover" />
+                  </div>
+                )}
+
+                <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                  <p className="text-sm font-extrabold text-white truncate leading-tight">
+                    {currentSong?.title || 'Whiplash'}
+                  </p>
+                  <p className="text-xs opacity-60 truncate">
+                    {currentSong?.artist || 'aespa'} {currentSong?.album ? `• ${currentSong.album}` : '• Whiplash'}
+                  </p>
+
+                  {config.showLyrics && (
+                    <div className="text-xs font-extrabold truncate flex items-center gap-1 mt-0.5" style={{ color: config.accentColor || '#1db954' }}>
+                      <span>🎵</span>
+                      <span className="truncate">Just close your eyes...</span>
+                    </div>
+                  )}
+
+                  {config.showProgressBar && (
+                    <div className="w-full h-1.5 rounded-full bg-white/15 overflow-hidden mt-1.5">
+                      <div
+                        style={{
+                          width: `${progressPct || 65}%`,
+                          backgroundColor: config.accentColor || '#1db954',
+                        }}
+                        className="h-full rounded-full transition-all"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {config.showNextSong && (
+                <div className="w-full pt-2 border-t border-white/10 flex items-center gap-2 text-xs min-w-0">
+                  <span
+                    style={{ color: config.accentColor || '#1db954' }}
+                    className="px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-white/10 shrink-0"
+                  >
+                    NEXT UP
+                  </span>
+                  <span className="truncate font-semibold text-white/90">
+                    {nextSong ? nextSong.title : 'Supernova'}{' '}
+                    <span className="opacity-50 font-normal">• {nextSong ? nextSong.artist : 'aespa'}</span>
+                  </span>
                 </div>
               )}
-
-              <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                <p className="text-sm font-extrabold text-white truncate leading-tight">
-                  {currentSong?.title || 'Whiplash'}
-                </p>
-                <p className="text-xs opacity-60 truncate">
-                  {currentSong?.artist || 'aespa'} {currentSong?.album ? `• ${currentSong.album}` : '• Whiplash'}
-                </p>
-
-                {config.showLyrics && (
-                  <div className="text-xs font-extrabold truncate flex items-center gap-1 mt-0.5" style={{ color: config.accentColor || '#1db954' }}>
-                    <span>🎵</span>
-                    <span className="truncate">Just close your eyes...</span>
-                  </div>
-                )}
-
-                {config.showProgressBar && (
-                  <div className="w-full h-1.5 rounded-full bg-white/15 overflow-hidden mt-1.5">
-                    <div
-                      style={{
-                        width: `${progressPct || 65}%`,
-                        backgroundColor: config.accentColor || '#1db954',
-                      }}
-                      className="h-full rounded-full transition-all"
-                    />
-                  </div>
-                )}
-              </div>
             </div>
           </div>
         </div>
@@ -409,6 +428,16 @@ export function OBSOverlaySection() {
                   type="checkbox"
                   checked={config.showLyrics}
                   onChange={(e) => updateConfig({ showLyrics: e.target.checked })}
+                  className="accent-sky-400 rounded w-4 h-4"
+                />
+              </label>
+
+              <label className="flex items-center justify-between text-xs text-text/80 cursor-pointer">
+                <span>Show Next Track Info</span>
+                <input
+                  type="checkbox"
+                  checked={config.showNextSong}
+                  onChange={(e) => updateConfig({ showNextSong: e.target.checked })}
                   className="accent-sky-400 rounded w-4 h-4"
                 />
               </label>

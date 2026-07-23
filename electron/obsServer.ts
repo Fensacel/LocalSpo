@@ -690,49 +690,67 @@ export class OBSServer {
 
         if (mode === 'compact') {
           app.innerHTML = \`
-            <div class="card \${themeClass}" style="padding: 8px 14px; min-width: 240px;">
-              \${cfg.showArtwork ? \`
-                <div class="artwork-wrap \${shapeClass} \${glowClass}" style="width:36px; height:36px;">
-                  <img class="artwork-img" src="\${state.artworkUrl}" alt="" />
+            <div class="card \${themeClass}" style="display:flex; flex-direction:column; gap:6px; padding: 8px 14px; min-width: 240px;">
+              <div style="display:flex; align-items:center; gap:12px;">
+                \${cfg.showArtwork ? \`
+                  <div class="artwork-wrap \${shapeClass} \${glowClass}" style="width:36px; height:36px;">
+                    <img class="artwork-img" src="\${state.artworkUrl}" alt="" />
+                  </div>
+                \` : ''}
+                <div class="info" style="gap:2px;">
+                  <div class="title" style="font-size:13px;">\${titleText}</div>
+                  <div class="artist" style="font-size:11px;">\${state.artist}</div>
+                </div>
+              </div>
+              \${cfg.showNextSong && state.nextSong ? \`
+                <div style="font-size:10px; opacity:0.75; border-top:1px solid rgba(255,255,255,0.08); padding-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  <span style="font-weight:800; color:var(--accent-color, #1db954);">NEXT:</span> \${state.nextSong.title} <span style="opacity:0.6;">• \${state.nextSong.artist}</span>
                 </div>
               \` : ''}
-              <div class="info" style="gap:2px;">
-                <div class="title" style="font-size:13px;">\${titleText}</div>
-                <div class="artist" style="font-size:11px;">\${state.artist}</div>
-              </div>
             </div>
           \`;
           return;
         }
 
-        // Clean, spacious overlay card layout for OBS
+        // Clean, spacious overlay card layout for OBS with Next Up support
         app.innerHTML = \`
-          <div class="card \${themeClass}" style="display:flex; align-items:center; gap:16px; padding:14px 20px; min-width:320px; max-width:540px;">
-            \${cfg.showArtwork ? \`
-              <div class="artwork-wrap \${shapeClass}" style="width:\${cfg.artworkSize || 56}px; height:\${cfg.artworkSize || 56}px; box-shadow: 0 0 24px rgba(29, 185, 84, 0.45); border-radius: 12px; flex-shrink:0;">
-                <img class="artwork-img" src="\${state.artworkUrl}" alt="" style="border-radius: 12px; width:100%; height:100%; object-fit:cover;" />
+          <div class="card \${themeClass}" style="display:flex; flex-direction:column; gap:10px; padding:14px 20px; min-width:320px; max-width:540px;">
+            <div style="display:flex; align-items:center; gap:16px; width:100%;">
+              \${cfg.showArtwork ? \`
+                <div class="artwork-wrap \${shapeClass}" style="width:\${cfg.artworkSize || 56}px; height:\${cfg.artworkSize || 56}px; box-shadow: 0 0 24px rgba(29, 185, 84, 0.45); border-radius: 12px; flex-shrink:0;">
+                  <img class="artwork-img" src="\${state.artworkUrl}" alt="" style="border-radius: 12px; width:100%; height:100%; object-fit:cover;" />
+                </div>
+              \` : ''}
+              <div class="info" style="display:flex; flex-direction:column; flex:1; min-width:0; gap:3px;">
+                <div class="title" style="font-size:15px; font-weight:800; color:var(--text-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; letter-spacing:-0.01em;">
+                  \${state.title || 'No Song Playing'}
+                </div>
+                <div class="artist" style="font-size:12px; font-weight:600; opacity:0.65; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                  \${state.artist}\${state.album ? ' • ' + state.album : ''}
+                </div>
+
+                \${cfg.showLyrics && state.currentLyric ? \`
+                  <div class="lyrics-container" style="font-size:12px; font-weight:700; color:var(--accent-color, #1db954); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px;">
+                    🎵 \${state.currentLyric}
+                  </div>
+                \` : ''}
+
+                \${cfg.showProgressBar ? \`
+                  <div class="progress-bar-wrap" style="width:100%; height:5px; background:rgba(255,255,255,0.15); border-radius:99px; overflow:hidden; margin-top:5px;">
+                    <div class="progress-fill" style="width: \${progressPct}%; height:100%; background:var(--accent-color, #1db954); border-radius:99px;"></div>
+                  </div>
+                \` : ''}
+              </div>
+            </div>
+
+            \${cfg.showNextSong && state.nextSong ? \`
+              <div class="next-up-bar" style="display:flex; align-items:center; gap:8px; font-size:11px; padding-top:8px; border-top:1px solid rgba(255,255,255,0.08); width:100%; min-width:0;">
+                <span style="font-size:9px; font-weight:800; letter-spacing:0.05em; text-transform:uppercase; padding:2px 6px; border-radius:4px; background:rgba(255,255,255,0.1); color:var(--accent-color, #1db954); flex-shrink:0;">NEXT UP</span>
+                <span style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:600; color:var(--text-color); opacity:0.85;">
+                  \${state.nextSong.title} <span style="opacity:0.55; font-weight:400;">• \${state.nextSong.artist}</span>
+                </span>
               </div>
             \` : ''}
-            <div class="info" style="display:flex; flex-direction:column; flex:1; min-width:0; gap:3px;">
-              <div class="title" style="font-size:15px; font-weight:800; color:var(--text-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; letter-spacing:-0.01em;">
-                \${state.title || 'No Song Playing'}
-              </div>
-              <div class="artist" style="font-size:12px; font-weight:600; opacity:0.65; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                \${state.artist}\${state.album ? ' • ' + state.album : ''}
-              </div>
-
-              \${cfg.showLyrics && state.currentLyric ? \`
-                <div class="lyrics-container" style="font-size:12px; font-weight:700; color:var(--accent-color, #1db954); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px;">
-                  🎵 \${state.currentLyric}
-                </div>
-              \` : ''}
-
-              \${cfg.showProgressBar ? \`
-                <div class="progress-bar-wrap" style="width:100%; height:5px; background:rgba(255,255,255,0.15); border-radius:99px; overflow:hidden; margin-top:5px;">
-                  <div class="progress-fill" style="width: \${progressPct}%; height:100%; background:var(--accent-color, #1db954); border-radius:99px;"></div>
-                </div>
-              \` : ''}
-            </div>
           </div>
         \`;
       }

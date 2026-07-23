@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Check, PartyPopper, X, Music2, ShieldCheck, Radio } from 'lucide-react';
+import { Sparkles, Check, PartyPopper, X, Music2, ShieldCheck, Radio, ListMusic } from 'lucide-react';
 
 // Current app release version
-const CURRENT_VERSION = '2.0.2';
+const CURRENT_VERSION = '2.0.3';
 
 export function WhatsNewModal() {
   const [isOpen, setIsOpen] = useState(false);
@@ -72,31 +72,43 @@ export function WhatsNewModal() {
           </div>
 
           <p className="text-xs text-text/60 mb-5 leading-relaxed">
-            Selamat datang di versi terbaru LocalSpo! Berikut adalah sorotan perbaikan dan fitur baru pada rilis ini:
+            Selamat datang di versi 2.0.3! Berikut adalah fitur baru, perbaikan streaming, dan peningkatan performa pada rilis ini:
           </p>
 
           {/* Feature Highlights List */}
-          <div className="space-y-3 mb-6 max-h-[260px] overflow-y-auto pr-1 custom-scrollbar">
+          <div className="space-y-3 mb-6 max-h-[280px] overflow-y-auto pr-1 custom-scrollbar">
             <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
               <div className="p-2 rounded-lg bg-emerald-500/15 text-emerald-400 shrink-0 mt-0.5">
                 <Music2 size={16} />
               </div>
               <div>
-                <h4 className="text-xs font-bold text-white">Fix Online Streaming Playback</h4>
+                <h4 className="text-xs font-bold text-white">Instant Online Stream Playback</h4>
                 <p className="text-[11px] text-text/50 mt-0.5 leading-snug">
-                  Putar lagu streaming hasil pencarian secara instan! Klik baris lagu atau tombol Play untuk langsung mendengarkan musik favorit tanpa hambatan.
+                  Putar musik dari pencarian online secara instan tanpa hambatan! Dukungan integrasi pemutar YouTube Music secara otomatis.
                 </p>
               </div>
             </div>
 
             <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
               <div className="p-2 rounded-lg bg-sky-500/15 text-sky-400 shrink-0 mt-0.5">
+                <ListMusic size={16} />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-white">Playlist Details & Recommendation Engine</h4>
+                <p className="text-[11px] text-text/50 mt-0.5 leading-snug">
+                  Tampilan halaman playlist baru dengan saran lagu otomatis berbasis rekomendasi musik sesuai preferensi pemutaran Anda.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+              <div className="p-2 rounded-lg bg-indigo-500/15 text-indigo-400 shrink-0 mt-0.5">
                 <Radio size={16} />
               </div>
               <div>
                 <h4 className="text-xs font-bold text-white">OBS Now Playing Overlay Server</h4>
                 <p className="text-[11px] text-text/50 mt-0.5 leading-snug">
-                  Server WebSocket lokal bawaan untuk menyediakan data judul lagu, artis, cover album, dan progress secara real-time ke OBS Studio.
+                  Integrasi server WebSocket lokal untuk mengirim judul lagu, artis, cover art, dan progress secara real-time ke OBS Studio.
                 </p>
               </div>
             </div>
@@ -108,7 +120,7 @@ export function WhatsNewModal() {
               <div>
                 <h4 className="text-xs font-bold text-white">Optimized Desktop Audio Engine</h4>
                 <p className="text-[11px] text-text/50 mt-0.5 leading-snug">
-                  Stabilitas mesin pemutar musik lokal & streaming pada Windows Desktop ditingkatkan secara signifikan.
+                  Peningkatan stabilitas mesin pemutar audio lokal, pemuatan lirik otomatis, dan perbaikan antarmuka UI.
                 </p>
               </div>
             </div>

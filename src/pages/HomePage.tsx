@@ -30,45 +30,100 @@ export function HomePage() {
   const [contextMenu, setContextMenu] = useState<{ song: Song; x: number; y: number } | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
 
-  // Load live online streaming tracks from YouTube Music based on actual user search history
+  // Load live online streaming tracks from YouTube Music based on user playlist & library artists
   useEffect(() => {
     let cancelled = false;
 
     const fetchFeatured = async () => {
       setIsLoadingFeatured(true);
       try {
-        let searchQuery = 'Trending Hits';
-        try {
-          const raw = localStorage.getItem('localspo_user_searches');
-          if (raw) {
-            const userSearches: string[] = JSON.parse(raw);
-            if (Array.isArray(userSearches) && userSearches.length > 0) {
-              searchQuery = userSearches[Math.floor(Math.random() * userSearches.length)];
-            }
-          }
-        } catch {}
-
         if (!window.electronAPI?.spotify?.search) {
           setIsLoadingFeatured(false);
           return;
         }
 
-        const res = await window.electronAPI.spotify.search(searchQuery, ['track']);
+        // Collect unique artists from user playlists and library
+        const artistSet = new Set<string>();
+
+        // 1. Artists from playlists
+        playlists.forEach((p) => {
+          p.songIds.forEach((sid) => {
+            const s = useLibraryStore.getState().getSongById(sid);
+            if (s?.artist && s.artist.trim() && !/unknown|various/i.test(s.artist)) {
+              artistSet.add(s.artist.trim());
+            }
+          });
+        });
+
+        // 2. Artists from local library
+        songs.forEach((s) => {
+          if (s.artist && s.artist.trim() && !/unknown|various/i.test(s.artist)) {
+            artistSet.add(s.artist.trim());
+          }
+        });
+
+        // 3. User past search history
+        try {
+          const raw = localStorage.getItem('localspo_user_searches');
+          if (raw) {
+            const userSearches: string[] = JSON.parse(raw);
+            if (Array.isArray(userSearches)) {
+              userSearches.forEach((q) => {
+                if (q && q.trim()) artistSet.add(q.trim());
+              });
+            }
+          }
+        } catch {}
+
+        const userArtists = Array.from(artistSet);
+
+        // Select queries: pick 2-3 random artists from user collection
+        let targetQueries: string[] = [];
+        if (userArtists.length > 0) {
+          const shuffled = [...userArtists].sort(() => Math.random() - 0.5);
+          targetQueries = shuffled.slice(0, 3);
+        } else {
+          targetQueries = ['Pop Music Hits', 'Top Songs'];
+        }
+
+        const collectedTracks: FeaturedTrack[] = [];
+
+        for (const query of targetQueries) {
+          try {
+            const res = await window.electronAPI.spotify.search(query, ['track']);
+            if (res && Array.isArray(res.tracks)) {
+              const valid = res.tracks
+                .filter((t: any) => t.ytVideoId || t.id)
+                .map((t: any) => ({
+                  ytVideoId: t.ytVideoId,
+                  id: t.id,
+                  title: t.title,
+                  artist: t.artist,
+                  album: t.album || 'Single',
+                  coverUrl:
+                    t.coverUrl ||
+                    (t.ytVideoId ? `https://i.ytimg.com/vi/${t.ytVideoId}/hqdefault.jpg` : '/default-cover.png'),
+                }));
+              collectedTracks.push(...valid);
+            }
+          } catch (err) {
+            console.error('Failed fetching featured query:', query, err);
+          }
+        }
+
         if (cancelled) return;
 
-        if (res && Array.isArray(res.tracks) && res.tracks.length > 0) {
-          const validTracks: FeaturedTrack[] = res.tracks
-            .filter((t: any) => t.ytVideoId || t.id)
-            .map((t: any) => ({
-              ytVideoId: t.ytVideoId,
-              id: t.id,
-              title: t.title,
-              artist: t.artist,
-              album: t.album || 'Single',
-              coverUrl: t.coverUrl || (t.ytVideoId ? `https://i.ytimg.com/vi/${t.ytVideoId}/hqdefault.jpg` : '/default-cover.png'),
-            }));
-          setFeaturedTracks(validTracks.slice(0, 16));
+        // Deduplicate tracks by videoId or title+artist
+        const trackMap = new Map<string, FeaturedTrack>();
+        for (const t of collectedTracks) {
+          const key = (t.ytVideoId || `${t.title}-${t.artist}`).toLowerCase();
+          if (!trackMap.has(key)) {
+            trackMap.set(key, t);
+          }
         }
+
+        const uniqueTracks = Array.from(trackMap.values()).sort(() => Math.random() - 0.5);
+        setFeaturedTracks(uniqueTracks.slice(0, 15));
       } catch (err) {
         console.error('Failed to load online streaming tracks:', err);
       } finally {
@@ -80,7 +135,7 @@ export function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [songs.length, playlists.length]);
 
   const handlePlayStreamTrack = (track: FeaturedTrack) => {
     const trackId = track.ytVideoId || track.id;
@@ -264,7 +319,7 @@ export function HomePage() {
                 <Sparkles size={20} className="text-sky-400" />
                 Quick Picks
               </h2>
-              <p className="text-xs text-text/40 mt-0.5">Start radio with any online stream track</p>
+              <p className="text-xs text-text/40 mt-0.5">Lagu pilihan berdasarkan artis di playlist & pustaka Anda</p>
             </div>
             <button
               onClick={() => navigate('/search')}
