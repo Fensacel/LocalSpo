@@ -30,8 +30,42 @@ interface StreamingState {
   clearAllCache: () => Promise<void>;
 }
 
+function loadCacheFromStorage(): Map<string, StreamCacheEntry> {
+  const map = new Map<string, StreamCacheEntry>();
+  try {
+    const raw = localStorage.getItem('localspo_streaming_url_cache');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const now = Date.now();
+      let count = 0;
+      for (const [key, entry] of Object.entries(parsed)) {
+        const e = entry as StreamCacheEntry;
+        if (e && e.url && e.expiresAt > now + 60_000) {
+          map.set(key, e);
+          count++;
+        }
+      }
+      console.log(`[StreamingStore] Loaded ${count} valid stream URLs from localStorage.`);
+    }
+  } catch {}
+  return map;
+}
+
+function saveCacheToStorage(cache: Map<string, StreamCacheEntry>) {
+  try {
+    const obj: Record<string, StreamCacheEntry> = {};
+    const now = Date.now();
+    for (const [key, entry] of cache.entries()) {
+      if (entry && entry.expiresAt > now + 60_000) {
+        obj[key] = entry;
+      }
+    }
+    localStorage.setItem('localspo_streaming_url_cache', JSON.stringify(obj));
+  } catch {}
+}
+
 export const useStreamingStore = create<StreamingState>((set, get) => ({
-  cache: new Map(),
+  cache: loadCacheFromStorage(),
   resolving: new Set(),
   errors: {},
   enabled: true,
@@ -47,6 +81,7 @@ export const useStreamingStore = create<StreamingState>((set, get) => ({
       const cache = new Map(get().cache);
       cache.delete(songId);
       set({ cache });
+      saveCacheToStorage(cache);
       return null;
     }
     return entry.url;
@@ -62,6 +97,7 @@ export const useStreamingStore = create<StreamingState>((set, get) => ({
 
   clearAllCache: async () => {
     set({ cache: new Map(), errors: {} });
+    saveCacheToStorage(new Map());
     useLibraryStore.getState().clearStreamSongsMap();
     if (window.electronAPI?.streaming?.clearCache) {
       await window.electronAPI.streaming.clearCache();
@@ -82,6 +118,7 @@ export const useStreamingStore = create<StreamingState>((set, get) => ({
       const cache = new Map(get().cache);
       cache.delete(songId);
       set({ cache });
+      saveCacheToStorage(cache);
     } else {
       // Return from cache if valid
       const cached = get().getCachedUrl(songId);
@@ -150,6 +187,7 @@ export const useStreamingStore = create<StreamingState>((set, get) => ({
           expiresAt: result.expiresAt,
         });
         set({ cache });
+        saveCacheToStorage(cache);
         return result.url;
       }
 

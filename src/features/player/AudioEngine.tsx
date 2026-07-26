@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
-import { usePlayerStore, useHistoryStore, useStreamingStore } from '@/stores';
+import { usePlayerStore, useHistoryStore, useStreamingStore, useToastStore } from '@/stores';
 import { getAudioUrl } from '@/utils';
 
 /**
@@ -96,6 +96,25 @@ export function AudioEngine() {
       navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
     }
   }, [isPlaying]);
+
+  // ── Sleep Timer countdown monitor ───────────────────────
+  const sleepTimerOption = usePlayerStore((s) => s.sleepTimerOption);
+  const sleepTimerEndsAt = usePlayerStore((s) => s.sleepTimerEndsAt);
+
+  useEffect(() => {
+    if (!sleepTimerEndsAt || sleepTimerOption === 'off') return;
+
+    const interval = setInterval(() => {
+      if (Date.now() >= sleepTimerEndsAt) {
+        console.log('[AudioEngine] Sleep timer expired. Stopping playback.');
+        usePlayerStore.getState().setIsPlaying(false);
+        usePlayerStore.getState().clearSleepTimer();
+        useToastStore.getState().showToast('Timer tidur selesai. Pemutaran dihentikan.', 'info');
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [sleepTimerOption, sleepTimerEndsAt]);
 
 
   // Initialize Web Audio API

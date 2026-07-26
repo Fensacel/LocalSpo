@@ -18,9 +18,11 @@ export function getBinaryPaths(getDataPath: () => string): BinaryPaths {
   const ffmpegName = isWin ? 'ffmpeg.exe' : 'ffmpeg';
 
   const possibleYtdlpPaths = [
+    ...(process.resourcesPath ? [path.join(process.resourcesPath, 'bin', ytdlpName)] : []),
     ...(app?.getAppPath ? [path.join(app.getAppPath(), 'bin', ytdlpName)] : []),
     path.join(process.cwd(), 'bin', ytdlpName),
     path.join(getDataPath(), 'bin', ytdlpName),
+    path.join(process.cwd(), ytdlpName),
     ytdlpName,
   ];
 

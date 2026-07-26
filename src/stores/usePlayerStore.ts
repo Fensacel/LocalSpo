@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Song, RepeatMode, ShuffleMode } from '@/types';
+import type { Song, RepeatMode, ShuffleMode, SleepTimerOption } from '@/types';
 import { useToastStore } from './useToastStore';
 import { platformService } from '@/platform';
 import { useLibraryStore } from './useLibraryStore';
@@ -23,9 +23,13 @@ interface PlayerState {
   history: Song[];
   sourceName: string | null;
 
-  // Modes
+  // Modes & Timers
   repeatMode: RepeatMode;
   shuffleMode: ShuffleMode;
+  sleepTimerOption: SleepTimerOption;
+  sleepTimerEndsAt: number | null;
+  sleepTimerRemainingSongs: number | null;
+  sleepTimerTotalSongs: number | null;
 
   // UI state
   showQueue: boolean;
@@ -55,9 +59,13 @@ interface PlayerState {
   playPrevious: () => Song | null;
   moveInQueue: (from: number, to: number) => void;
 
-  // Mode actions
+  // Mode & Timer actions
   toggleRepeat: () => void;
   toggleShuffle: () => void;
+  setSleepTimer: (option: SleepTimerOption) => void;
+  startSongsSleepTimer: (count: number) => void;
+  startMinutesSleepTimer: (minutes: number) => void;
+  clearSleepTimer: () => void;
 
   // UI actions
   toggleQueue: () => void;
@@ -110,6 +118,10 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   repeatMode: 'off',
   shuffleMode: 'off',
+  sleepTimerOption: 'off',
+  sleepTimerEndsAt: null,
+  sleepTimerRemainingSongs: null,
+  sleepTimerTotalSongs: null,
 
   showQueue: false,
   showLyrics: false,
@@ -278,9 +290,51 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   playNext: () => {
     const state = get();
-    const { queue, queueIndex, repeatMode } = state;
+    const { queue, queueIndex, repeatMode, sleepTimerOption, sleepTimerRemainingSongs, sleepTimerTotalSongs } = state;
 
     if (queue.length === 0) return null;
+
+    // Check sleep timer conditions before advancing
+    if (sleepTimerOption === 'end_of_song') {
+      set({
+        isPlaying: false,
+        sleepTimerOption: 'off',
+        sleepTimerEndsAt: null,
+        sleepTimerRemainingSongs: null,
+        sleepTimerTotalSongs: null,
+      });
+      useToastStore.getState().showToast('Timer tidur: Lagu telah selesai', 'info');
+      return null;
+    }
+
+    if (sleepTimerRemainingSongs !== null && sleepTimerRemainingSongs !== undefined) {
+      const nextRemaining = sleepTimerRemainingSongs - 1;
+      if (nextRemaining <= 0) {
+        set({
+          isPlaying: false,
+          sleepTimerOption: 'off',
+          sleepTimerEndsAt: null,
+          sleepTimerRemainingSongs: null,
+          sleepTimerTotalSongs: null,
+        });
+        useToastStore.getState().showToast(`Timer tidur: ${sleepTimerTotalSongs || 1} lagu telah selesai diputar`, 'info');
+        return null;
+      } else {
+        set({ sleepTimerRemainingSongs: nextRemaining });
+      }
+    }
+
+    if (sleepTimerOption === 'end_of_playlist' && queueIndex >= queue.length - 1) {
+      set({
+        isPlaying: false,
+        sleepTimerOption: 'off',
+        sleepTimerEndsAt: null,
+        sleepTimerRemainingSongs: null,
+        sleepTimerTotalSongs: null,
+      });
+      useToastStore.getState().showToast('Timer tidur: Playlist telah selesai', 'info');
+      return null;
+    }
 
     let nextIndex: number;
 
@@ -310,6 +364,80 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       window.dispatchEvent(new CustomEvent('player:seek', { detail: 0 }));
     }
     return nextSong;
+  },
+
+  setSleepTimer: (option) => {
+    if (option === 'off') {
+      set({
+        sleepTimerOption: 'off',
+        sleepTimerEndsAt: null,
+        sleepTimerRemainingSongs: null,
+        sleepTimerTotalSongs: null,
+      });
+      useToastStore.getState().showToast('Timer tidur dimatikan', 'info');
+      return;
+    }
+
+    let endsAt: number | null = null;
+    let label = '';
+
+    if (option === '15m') {
+      endsAt = Date.now() + 15 * 60 * 1000;
+      label = '15 menit';
+    } else if (option === '30m') {
+      endsAt = Date.now() + 30 * 60 * 1000;
+      label = '30 menit';
+    } else if (option === '45m') {
+      endsAt = Date.now() + 45 * 60 * 1000;
+      label = '45 menit';
+    } else if (option === '1h') {
+      endsAt = Date.now() + 60 * 60 * 1000;
+      label = '1 jam';
+    } else if (option === 'end_of_song') {
+      label = 'setelah lagu ini selesai';
+    } else if (option === 'end_of_playlist') {
+      label = 'setelah playlist selesai';
+    }
+
+    set({
+      sleepTimerOption: option,
+      sleepTimerEndsAt: endsAt,
+      sleepTimerRemainingSongs: option === 'end_of_song' ? 1 : null,
+      sleepTimerTotalSongs: option === 'end_of_song' ? 1 : null,
+    });
+    useToastStore.getState().showToast(`Timer tidur diatur: ${label}`, 'info');
+  },
+
+  startSongsSleepTimer: (count) => {
+    if (count <= 0) return;
+    set({
+      sleepTimerOption: count === 1 ? 'end_of_song' : 'off',
+      sleepTimerEndsAt: null,
+      sleepTimerRemainingSongs: count,
+      sleepTimerTotalSongs: count,
+    });
+    useToastStore.getState().showToast(`Timer tidur diatur: Setelah ${count} lagu`, 'info');
+  },
+
+  startMinutesSleepTimer: (minutes) => {
+    if (minutes <= 0) return;
+    const endsAt = Date.now() + minutes * 60 * 1000;
+    set({
+      sleepTimerOption: 'off',
+      sleepTimerEndsAt: endsAt,
+      sleepTimerRemainingSongs: null,
+      sleepTimerTotalSongs: null,
+    });
+    useToastStore.getState().showToast(`Timer tidur diatur: ${minutes} menit`, 'info');
+  },
+
+  clearSleepTimer: () => {
+    set({
+      sleepTimerOption: 'off',
+      sleepTimerEndsAt: null,
+      sleepTimerRemainingSongs: null,
+      sleepTimerTotalSongs: null,
+    });
   },
 
   playPrevious: () => {

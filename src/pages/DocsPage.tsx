@@ -9,6 +9,8 @@ import {
   Download,
   Tag,
   Sliders,
+  Timer,
+  Radio,
 } from 'lucide-react';
 
 export function DocsPage() {
@@ -26,7 +28,7 @@ export function DocsPage() {
         </div>
         <h1 className="text-4xl font-extrabold text-text tracking-tight">Features & Documentation</h1>
         <p className="text-base text-text/50 max-w-2xl">
-          Discover all native capabilities built into Localspo — from native Spotify downloading to ID3 tag editing and synced karaoke lyrics.
+          Discover all native capabilities built into Localspo — from ad-free online streaming to Spotify downloading, ID3 tag editing, and synced karaoke lyrics.
         </p>
       </motion.div>
 
@@ -43,6 +45,34 @@ export function DocsPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Ad-Free Online Streaming */}
+          <div className="glass p-6 rounded-2xl border border-white/5 space-y-4 hover:border-primary/30 transition-all duration-300">
+            <div className="w-11 h-11 rounded-xl bg-cyan-500/15 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
+              <Radio size={22} />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-text">Ad-Free Online Streaming</h3>
+              <p className="text-xs text-text/40 mt-0.5">Instant playback without downloading</p>
+            </div>
+            <p className="text-sm text-text/60 leading-relaxed">
+              Stream any song directly from search results instantly without downloading local files. Enjoy 100% ad-free online music playback powered by background stream URL resolution.
+            </p>
+            <ul className="space-y-2 text-xs text-text/70 pt-1">
+              <li className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-cyan-400 shrink-0" />
+                <span><strong>No Download Needed:</strong> Play online tracks immediately with zero storage overhead.</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-cyan-400 shrink-0" />
+                <span><strong>100% Ad-Free:</strong> Continuous playback without commercial interruptions or pop-up ads.</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-cyan-400 shrink-0" />
+                <span><strong>Smart Prefetching:</strong> Automatically pre-resolves upcoming queue tracks for gapless listening.</span>
+              </li>
+            </ul>
+          </div>
+
           {/* Native Spotify Downloader */}
           <div className="glass p-6 rounded-2xl border border-white/5 space-y-4 hover:border-primary/30 transition-all duration-300">
             <div className="w-11 h-11 rounded-xl bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
@@ -98,6 +128,34 @@ export function DocsPage() {
               </li>
             </ul>
           </div>
+
+          {/* Interactive Sleep Timer Widget */}
+          <div className="glass p-6 rounded-2xl border border-white/5 space-y-4 hover:border-primary/30 transition-all duration-300">
+            <div className="w-11 h-11 rounded-xl bg-sky-500/15 border border-sky-500/20 flex items-center justify-center text-sky-400">
+              <Timer size={22} />
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-text">Sleep Timer Widget</h3>
+              <p className="text-xs text-text/40 mt-0.5">Click the Timer button on bottom player</p>
+            </div>
+            <p className="text-sm text-text/60 leading-relaxed">
+              Floating popover widget for automatic playback shutdown. Set timers by song count (e.g. 10 songs), custom duration (minutes), or end of current playlist.
+            </p>
+            <ul className="space-y-2 text-xs text-text/70 pt-1">
+              <li className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-sky-400 shrink-0" />
+                <span><strong>Track & Minute Steppers:</strong> Stepper controls to set exact song count or minutes.</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-sky-400 shrink-0" />
+                <span><strong>Floating Popover UI:</strong> Sleek pop-up right above the Timer icon button.</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-sky-400 shrink-0" />
+                <span><strong>End of Playlist Mode:</strong> Automatically stops playback once the current queue finishes.</span>
+              </li>
+            </ul>
+          </div>
         </div>
       </motion.div>
 
@@ -115,7 +173,7 @@ export function DocsPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           {/* Synced Karaoke */}
-          <div className="glass p-6 rounded-2xl border border-white/5 space-y-3">
+          <div className="glass p-6 rounded-2xl border border-white/5 space-y-3 hover:border-primary/30 transition-all duration-300">
             <div className="w-10 h-10 rounded-xl bg-primary/15 border border-primary/20 flex items-center justify-center text-primary">
               <Mic2 size={20} />
             </div>
@@ -136,7 +194,7 @@ export function DocsPage() {
           </div>
 
           {/* Audio Engine */}
-          <div className="glass p-6 rounded-2xl border border-white/5 space-y-3">
+          <div className="glass p-6 rounded-2xl border border-white/5 space-y-3 hover:border-primary/30 transition-all duration-300">
             <div className="w-10 h-10 rounded-xl bg-primary/15 border border-primary/20 flex items-center justify-center text-primary">
               <Music size={20} />
             </div>
@@ -157,7 +215,7 @@ export function DocsPage() {
           </div>
 
           {/* Library Scanner */}
-          <div className="glass p-6 rounded-2xl border border-white/5 space-y-3">
+          <div className="glass p-6 rounded-2xl border border-white/5 space-y-3 hover:border-primary/30 transition-all duration-300">
             <div className="w-10 h-10 rounded-xl bg-primary/15 border border-primary/20 flex items-center justify-center text-primary">
               <FolderOpen size={20} />
             </div>

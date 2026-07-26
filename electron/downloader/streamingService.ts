@@ -24,12 +24,14 @@ const URL_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 export class StreamingService {
   private getDataPath: () => string;
-  private memoryCache = new Map<string, CacheEntry>(); // videoId -> CacheEntry
+  private memoryCache = new Map<string, CacheEntry>(); // cacheKey -> CacheEntry
+  private videoMap = new Map<string, string>(); // cacheKey -> videoId (permanent)
   private resolvingIds = new Set<string>(); // prevent concurrent duplicate resolves
 
   constructor(getDataPath: () => string) {
     this.getDataPath = getDataPath;
     this.loadDiskCache();
+    this.loadVideoMapDiskCache();
   }
 
   // ─── Public API ───────────────────────────────────────────────────────────
@@ -52,10 +54,28 @@ export class StreamingService {
       console.log(`[Streaming] Force refresh requested for: ${artist} - ${title}`);
       this.memoryCache.delete(cacheKey);
     } else {
+      // 1. Direct stream URL memory/disk cache hit
       const cached = this.memoryCache.get(cacheKey);
       if (cached && Date.now() < cached.result.expiresAt - 60_000) {
-        console.log(`[Streaming] Cache hit for: ${artist} - ${title}`);
+        console.log(`[Streaming] Direct URL cache hit for: ${artist} - ${title}`);
         return cached.result;
+      }
+
+      // 2. Permanent Video ID cache hit — skip expensive search & resolve directly!
+      const knownVideoId = this.videoMap.get(cacheKey);
+      if (knownVideoId) {
+        console.log(`[Streaming] Permanent Video ID hit (${knownVideoId}) for: ${artist} - ${title}. Resolving stream URL directly...`);
+        const directResult = await this.resolveByVideoId(knownVideoId, false);
+        if (directResult) {
+          directResult.title = title;
+          directResult.artist = artist;
+          if (album) directResult.album = album;
+          if (coverUrl) directResult.coverUrl = coverUrl;
+
+          this.memoryCache.set(cacheKey, { result: directResult, cachedAt: Date.now() });
+          this.saveDiskCache();
+          return directResult;
+        }
       }
     }
 
@@ -82,13 +102,20 @@ export class StreamingService {
         finalTitle = ytResult.title || title;
         finalArtist = ytResult.artist || artist;
         durationSec = ytResult.durationSeconds || durationSeconds || 0;
-      } else {
+      }
+
+      if (!videoId) {
         console.log(`[StreamingEngine] YTMusicApi returned null. Falling back to yt-dlp search for: ${artist} - ${title}`);
         videoId = await this.resolveVideoIdByYtDlpSearch(artist, title, album, durationSeconds);
       }
 
       if (!videoId) {
-        console.warn(`[Streaming] No videoId found via YTMusicApi or yt-dlp for: ${artist} - ${title}`);
+        console.log(`[StreamingEngine] Strict search returned null. Trying simple search fallback for: ${artist} - ${title}`);
+        videoId = await this.resolveVideoIdBySimpleSearch(artist, title);
+      }
+
+      if (!videoId) {
+        console.warn(`[Streaming] No videoId found via any search method for: ${artist} - ${title}`);
         return null;
       }
 
@@ -97,9 +124,18 @@ export class StreamingService {
       }
 
       // 2. Resolve direct audio URL with yt-dlp using LOCKED videoId ONLY
-      const url = await this.resolveVideoUrl(videoId);
+      let url = await this.resolveVideoUrl(videoId);
       if (!url) {
-        console.error(`[Streaming] yt-dlp failed to resolve URL for videoId: ${videoId}`);
+        console.warn(`[Streaming] yt-dlp failed for videoId: ${videoId}. Retrying with simple fallback search...`);
+        const altVideoId = await this.resolveVideoIdBySimpleSearch(artist, title);
+        if (altVideoId && altVideoId !== videoId) {
+          videoId = altVideoId;
+          url = await this.resolveVideoUrl(videoId);
+        }
+      }
+
+      if (!url) {
+        console.error(`[Streaming] All resolution attempts failed for: ${artist} - ${title}`);
         return null;
       }
 
@@ -122,6 +158,9 @@ export class StreamingService {
         coverUrl: coverUrl || `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`,
         durationSeconds: durationSec,
       };
+
+      this.videoMap.set(cacheKey, videoId);
+      this.saveVideoMapDiskCache();
 
       this.memoryCache.set(cacheKey, { result, cachedAt: Date.now() });
       this.saveDiskCache();
@@ -284,7 +323,57 @@ export class StreamingService {
       return url;
     }
 
+    // 3rd stage fallback attempt
+    console.warn(`[Streaming] Fallback yt-dlp failed for ${videoId}. Retrying with minimal args...`);
+    const lastResortArgs = [
+      '--no-warnings',
+      '--no-playlist',
+      '--get-url',
+      videoUrl,
+    ];
+    url = await runYtDlp(lastResortArgs);
+    if (url) {
+      console.log(`[Streaming] Last-resort resolved URL (${url.slice(0, 80)}...) for videoId: ${videoId}`);
+      return url;
+    }
+
     return null;
+  }
+
+  private resolveVideoIdBySimpleSearch(artist: string, title: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      const { ytdlp } = getBinaryPaths(this.getDataPath);
+      const query = `ytsearch1:${artist} ${title} audio`;
+      const args = [
+        '--no-warnings',
+        '--no-playlist',
+        '--flat-playlist',
+        '--print',
+        '%(id)s',
+        query,
+      ];
+      const proc = spawn(ytdlp, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+      let stdout = '';
+      proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
+      const timeout = setTimeout(() => {
+        proc.kill('SIGTERM');
+        resolve(null);
+      }, 10_000);
+
+      proc.on('close', (code) => {
+        clearTimeout(timeout);
+        const vid = stdout.split(/\r?\n/)[0]?.trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 11);
+        if (code === 0 && vid && vid.length === 11) {
+          resolve(vid);
+        } else {
+          resolve(null);
+        }
+      });
+      proc.on('error', () => {
+        clearTimeout(timeout);
+        resolve(null);
+      });
+    });
   }
 
   private resolveVideoIdByYtDlpSearch(artist: string, title: string, album?: string, durationSec?: number): Promise<string | null> {
@@ -642,6 +731,41 @@ export class StreamingService {
       const obj: Record<string, CacheEntry> = {};
       for (const [key, entry] of this.memoryCache.entries()) {
         obj[key] = entry;
+      }
+      fs.writeFileSync(filePath, JSON.stringify(obj, null, 2), 'utf-8');
+    } catch {
+      // non-critical
+    }
+  }
+
+  private getVideoMapFilePath(): string {
+    return path.join(this.getDataPath(), 'video_map_cache.json');
+  }
+
+  private loadVideoMapDiskCache(): void {
+    try {
+      const filePath = this.getVideoMapFilePath();
+      if (!fs.existsSync(filePath)) return;
+      const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      let loaded = 0;
+      for (const [key, vid] of Object.entries(raw)) {
+        if (typeof vid === 'string' && vid.length === 11 && vid !== '8rcyZC6YEh0') {
+          this.videoMap.set(key, vid);
+          loaded++;
+        }
+      }
+      console.log(`[Streaming] Loaded ${loaded} permanent video ID mappings from disk.`);
+    } catch {
+      // ignore
+    }
+  }
+
+  private saveVideoMapDiskCache(): void {
+    try {
+      const filePath = this.getVideoMapFilePath();
+      const obj: Record<string, string> = {};
+      for (const [key, vid] of this.videoMap.entries()) {
+        obj[key] = vid;
       }
       fs.writeFileSync(filePath, JSON.stringify(obj, null, 2), 'utf-8');
     } catch {

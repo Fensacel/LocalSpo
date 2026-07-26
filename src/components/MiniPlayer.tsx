@@ -16,8 +16,10 @@ import {
   Mic2,
   PanelRight,
   Maximize2,
+  Timer,
 } from 'lucide-react';
 import { useRef, useState, useEffect } from 'react';
+import { SleepTimerModal } from './SleepTimerModal';
 
 export function MiniPlayer() {
   const {
@@ -29,6 +31,7 @@ export function MiniPlayer() {
     isMuted,
     repeatMode,
     shuffleMode,
+    sleepTimerOption,
     showLyrics,
     showNowPlayingSidebar,
     setIsPlaying,
@@ -45,6 +48,8 @@ export function MiniPlayer() {
     playNext,
     playPrevious,
   } = usePlayerStore();
+
+  const [showSleepTimerModal, setShowSleepTimerModal] = useState(false);
 
   const progressRef = useRef<HTMLDivElement>(null);
   const volumeRef = useRef<HTMLDivElement>(null);
@@ -271,6 +276,23 @@ export function MiniPlayer() {
           <ControlButton onClick={toggleQueue} size="sm" title="Queue">
             <ListMusic size={15} strokeWidth={1.8} />
           </ControlButton>
+
+          <div className="relative">
+            <ControlButton
+              onClick={() => setShowSleepTimerModal(!showSleepTimerModal)}
+              active={sleepTimerOption !== 'off'}
+              size="sm"
+              title="Sleep Timer"
+            >
+              <Timer size={15} strokeWidth={1.8} />
+            </ControlButton>
+
+            <SleepTimerModal
+              isOpen={showSleepTimerModal}
+              onClose={() => setShowSleepTimerModal(false)}
+              align="bottom-player"
+            />
+          </div>
 
           {/* Volume */}
           <div className="flex items-center gap-2">

@@ -232,6 +232,10 @@ export type RepeatMode = 'off' | 'all' | 'one';
 
 export type ShuffleMode = 'off' | 'on';
 
+export type SleepTimerMode = 'off' | 'time' | 'songs' | 'end_of_playlist';
+export type SleepTimerOption = 'off' | '15m' | '30m' | '45m' | '1h' | 'end_of_song' | 'end_of_playlist';
+
+
 export type VisualizerType = 'waveform' | 'spectrum' | 'particle' | 'circular' | 'none';
 
 export type ViewMode = 'grid' | 'list';

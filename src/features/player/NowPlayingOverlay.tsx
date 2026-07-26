@@ -15,7 +15,9 @@ import {
   Repeat,
   Repeat1,
   Minimize2,
+  Timer,
 } from 'lucide-react';
+import { SleepTimerModal } from '@/components/SleepTimerModal';
 import { parseLyrics, findCurrentLyricIndex } from '@/services/lyricsParser';
 import { RomanizationService } from '@/modules/romanization/RomanizationService';
 import { formatTime, getImageUrl } from '@/utils';
@@ -118,6 +120,7 @@ export function NowPlayingOverlay() {
     isMuted,
     repeatMode,
     shuffleMode,
+    sleepTimerOption,
     showNowPlaying,
     setShowNowPlaying,
     setIsPlaying,
@@ -129,6 +132,8 @@ export function NowPlayingOverlay() {
 
   const { isFavoriteSong, toggleFavoriteSong } = useFavoritesStore();
   const { seekByLyricsEnabled, lyricsDisplayMode, updateSettings } = useSettingsStore();
+
+  const [showSleepTimerModal, setShowSleepTimerModal] = useState(false);
 
   const showLyrics = true;
   const [lyrics, setLyrics] = useState<LyricsData | null>(null);
@@ -298,6 +303,27 @@ export function NowPlayingOverlay() {
             </motion.div>
             <span>Now Playing</span>
           </button>
+
+          <div className="relative">
+            <button
+              onClick={() => setShowSleepTimerModal(!showSleepTimerModal)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 ${
+                sleepTimerOption !== 'off'
+                  ? 'bg-primary/20 text-primary border border-primary/40'
+                  : 'text-white/50 hover:text-white hover:bg-white/10'
+              }`}
+              title="Sleep Timer"
+            >
+              <Timer size={15} />
+              <span>Sleep Timer</span>
+            </button>
+
+            <SleepTimerModal
+              isOpen={showSleepTimerModal}
+              onClose={() => setShowSleepTimerModal(false)}
+              align="top-bar"
+            />
+          </div>
         </div>
 
         {/* ════ Main Grid ════ */}

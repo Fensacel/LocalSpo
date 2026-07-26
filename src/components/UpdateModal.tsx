@@ -47,8 +47,8 @@ export function UpdateModal() {
       setUpdateInfo(
         customEvent.detail || {
           status: 'downloaded',
-          version: '2.0.3',
-          releaseName: 'v2.0.3 - Instant Streaming & OBS Overlay Next Up',
+          version: '2.0.4',
+          releaseName: 'v2.0.4 - Instant Streaming & OBS Overlay Next Up',
           releaseNotes:
             '• Instant online search track playback with YouTube Music resolver\n• OBS Now Playing Overlay server with Next Up track info\n• Personalized Quick Picks based on your playlist & library artists\n• Playlist details page & recommendation engine\n• Improved desktop audio engine stability & multi-provider lyrics',
         },

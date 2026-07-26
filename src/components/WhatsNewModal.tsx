@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Check, PartyPopper, X, Music2, ShieldCheck, Radio, ListMusic } from 'lucide-react';
+import { Sparkles, Check, PartyPopper, X, Music2, ShieldCheck, Radio, ListMusic, Timer } from 'lucide-react';
 
 // Current app release version
-const CURRENT_VERSION = '2.0.3';
+const CURRENT_VERSION = '2.0.4';
 
 export function WhatsNewModal() {
   const [isOpen, setIsOpen] = useState(false);
@@ -15,13 +15,13 @@ export function WhatsNewModal() {
         // Show what's new modal on first launch of this version
         setIsOpen(true);
       }
-    } catch {}
+    } catch { }
   }, []);
 
   const handleClose = () => {
     try {
       localStorage.setItem('localspo_last_seen_version', CURRENT_VERSION);
-    } catch {}
+    } catch { }
     setIsOpen(false);
   };
 
@@ -72,7 +72,7 @@ export function WhatsNewModal() {
           </div>
 
           <p className="text-xs text-text/60 mb-5 leading-relaxed">
-            Selamat datang di versi 2.0.3! Berikut adalah fitur baru, perbaikan streaming, dan peningkatan performa pada rilis ini:
+            Selamat datang di versi 2.0.4! Berikut adalah fitur baru, perbaikan streaming, dan peningkatan performa pada rilis ini:
           </p>
 
           {/* Feature Highlights List */}
@@ -82,9 +82,9 @@ export function WhatsNewModal() {
                 <Music2 size={16} />
               </div>
               <div>
-                <h4 className="text-xs font-bold text-white">Instant Online Stream Playback</h4>
+                <h4 className="text-xs font-bold text-white">Instant Ad-Free Online Streaming</h4>
                 <p className="text-[11px] text-text/50 mt-0.5 leading-snug">
-                  Putar musik dari pencarian online secara instan tanpa hambatan! Dukungan integrasi pemutar YouTube Music secara otomatis.
+                  Putar lagu dari pencarian online secara instan tanpa download dan 100% bebas iklan!
                 </p>
               </div>
             </div>
@@ -109,6 +109,18 @@ export function WhatsNewModal() {
                 <h4 className="text-xs font-bold text-white">OBS Now Playing Overlay Server</h4>
                 <p className="text-[11px] text-text/50 mt-0.5 leading-snug">
                   Integrasi server WebSocket lokal untuk mengirim judul lagu, artis, cover art, dan progress secara real-time ke OBS Studio.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+              <div className="p-2 rounded-lg bg-emerald-500/15 text-emerald-400 shrink-0 mt-0.5">
+                <Timer size={16} />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-white">Interactive Sleep Timer Widget</h4>
+                <p className="text-[11px] text-text/50 mt-0.5 leading-snug">
+                  Fitur Sleep Timer baru dengan pop-up mengambang. Atur pemutaran otomatis berhenti berdasarkan jumlah lagu (misal: 10 lagu), durasi menit, atau akhir playlist.
                 </p>
               </div>
             </div>

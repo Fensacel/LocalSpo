@@ -34,7 +34,7 @@ You can download the latest installer `.exe` for Windows directly from the GitHu
 - **📊 Listening History & Analytics**:
   - Track listening history with individual item removal via right-click context menu.
   - Recap stats for Most Played tracks (Today, This Week, This Month).
-- **🎨 Glassmorphism & Modern UI**: Animated album artwork, dynamic color palettes, full-screen Now Playing mode, and smooth Framer Motion animations.
+- **⏱️ Interactive Sleep Timer Widget**: Floating popover popup allowing users to set auto-stop playback by track count (e.g. 10 songs), custom duration (minutes), or at the end of the active playlist.
 - **🔄 Auto-Updater**: Built-in `electron-updater` integration with background download and 1-click restart-to-update support.
 
 ---
