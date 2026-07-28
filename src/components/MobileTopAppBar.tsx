@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Search, Music2 } from 'lucide-react';
+import { ArrowLeft, Search } from 'lucide-react';
 
 export function MobileTopAppBar() {
   const navigate = useNavigate();
@@ -20,9 +20,11 @@ export function MobileTopAppBar() {
           </button>
         ) : (
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-700 flex items-center justify-center shadow-lg shadow-green-500/20">
-              <Music2 size={18} className="text-white" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="LocalSpo"
+              className="w-7 h-7 object-contain rounded-lg"
+            />
             <span className="font-bold text-base tracking-tight text-white">LocalSpo</span>
           </div>
         )}

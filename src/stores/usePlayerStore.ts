@@ -4,6 +4,8 @@ import { useToastStore } from './useToastStore';
 import { platformService } from '@/platform';
 import { useLibraryStore } from './useLibraryStore';
 import { useStreamingStore } from './useStreamingStore';
+import { useSettingsStore } from './useSettingsStore';
+import { createStreamSong } from '@/types/music';
 
 interface PlayerState {
   // Current playback
@@ -57,6 +59,7 @@ interface PlayerState {
   clearUserQueue: () => void;
   playNext: () => Song | null;
   playPrevious: () => Song | null;
+  handleAutoplayNext: () => Promise<Song | null>;
   moveInQueue: (from: number, to: number) => void;
 
   // Mode & Timer actions
@@ -345,7 +348,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     } else if (repeatMode === 'all') {
       nextIndex = 0;
     } else {
-      set({ isPlaying: false });
+      // Reached the end of playlist/queue -> Trigger Autoplay!
+      get().handleAutoplayNext();
       return null;
     }
 
@@ -364,6 +368,112 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       window.dispatchEvent(new CustomEvent('player:seek', { detail: 0 }));
     }
     return nextSong;
+  },
+
+  handleAutoplayNext: async () => {
+    const state = get();
+    const { queue, queueIndex } = state;
+    if (queue.length === 0) return null;
+
+    const autoplay = useSettingsStore.getState().autoplay ?? true;
+    if (!autoplay) {
+      set({ isPlaying: false });
+      return null;
+    }
+
+    // Extract unique artist names from recent tracks in queue
+    const recentSongs = queue.slice(Math.max(0, queue.length - 20));
+    const artists = [...new Set(recentSongs.map((s) => s.artist).filter(Boolean))];
+    const existingIds = new Set(queue.map((s) => s.id));
+    const existingTitles = new Set(queue.map((s) => `${s.title.toLowerCase()}_${s.artist.toLowerCase()}`));
+
+    let newSongs: Song[] = [];
+
+    // 1. Check local library for unplayed songs by same artists
+    const { songs: localSongs } = useLibraryStore.getState();
+    const localMatches = localSongs.filter(
+      (s) =>
+        artists.some((art) => s.artist.toLowerCase().includes(art.toLowerCase())) &&
+        !existingIds.has(s.id) &&
+        !existingTitles.has(`${s.title.toLowerCase()}_${s.artist.toLowerCase()}`)
+    );
+    newSongs.push(...shuffleArray(localMatches));
+
+    // 2. Query online Spotify/YouTube search for a DIVERSE mix across up to 4 different artists from the playlist
+    if (window.electronAPI?.spotify && artists.length > 0) {
+      const selectedArtists = shuffleArray(artists).slice(0, 4);
+      try {
+        const searchPromises = selectedArtists.map((artistName) =>
+          window.electronAPI!.spotify.search(artistName, ['track'], 10)
+        );
+        const searchResultsList = await Promise.allSettled(searchPromises);
+
+        const fetchedTracksPerArtist: Song[] = [];
+
+        for (const res of searchResultsList) {
+          if (res.status === 'fulfilled' && res.value?.tracks && res.value.tracks.length > 0) {
+            const tracksForThisArtist = res.value.tracks
+              .filter((t: any) => {
+                const key = `stream_${t.ytVideoId || t.id}`;
+                const titleKey = `${(t.title || t.name).toLowerCase()}_${(t.artist || t.artists?.[0]?.name || '').toLowerCase()}`;
+                return !existingIds.has(key) && !existingTitles.has(titleKey);
+              })
+              .slice(0, 3) // Take top 3 diverse songs per artist
+              .map((t: any) => {
+                const streamSong = createStreamSong({
+                  id: `stream_${t.ytVideoId || t.id}`,
+                  title: t.title || t.name,
+                  artist: t.artist || t.artists?.[0]?.name || 'Unknown Artist',
+                  album: t.album?.name || t.album || 'Single',
+                  duration: (t.durationMs || 180000) / 1000,
+                  coverUrl: t.coverUrl || t.album?.images?.[0]?.url,
+                  ytVideoId: t.ytVideoId || '',
+                });
+                useLibraryStore.getState().addStreamSong(streamSong);
+                return streamSong;
+              });
+            fetchedTracksPerArtist.push(...tracksForThisArtist);
+          }
+        }
+
+        // Shuffle the fetched tracks so artists are intermingled nicely
+        newSongs.push(...shuffleArray(fetchedTracksPerArtist));
+      } catch (err) {
+        console.warn('[Autoplay] Diverse recommendation search error:', err);
+      }
+    }
+
+    if (newSongs.length > 0) {
+      const nextIndex = queueIndex + 1;
+      const updatedQueue = [...state.queue, ...newSongs];
+      const updatedOriginal = [...state.originalQueue, ...newSongs];
+      const nextSong = updatedQueue[nextIndex];
+
+      if (nextSong.sourceType === 'streaming') {
+        useStreamingStore.getState().resolveStreamUrl(nextSong, true).catch(() => {});
+      }
+
+      set({
+        queue: updatedQueue,
+        originalQueue: updatedOriginal,
+        queueIndex: nextIndex,
+        currentSong: nextSong,
+        currentTime: 0,
+        isPlaying: true,
+        history: state.currentSong ? [...state.history, state.currentSong] : state.history,
+      });
+
+      window.dispatchEvent(new CustomEvent('player:play'));
+
+      useToastStore
+        .getState()
+        .showToast(`Autoplay: Memutar lagu serupa (${nextSong.artist} — ${nextSong.title})`, 'info');
+
+      return nextSong;
+    }
+
+    set({ isPlaying: false });
+    return null;
   },
 
   setSleepTimer: (option) => {

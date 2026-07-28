@@ -17,7 +17,7 @@ export function registerPlaylistSyncIpc(
 
   // ─── Spotify Search ────────────────────────────────────────────────────────
 
-  ipcMain.handle('spotify:search', async (_event, query: string, types?: string[]) => {
+  ipcMain.handle('spotify:search', async (_event, query: string, types?: string[], limit?: number) => {
     try {
       const searchTypes = (types || ['track', 'album', 'artist', 'playlist']) as (
         | 'track'
@@ -25,7 +25,7 @@ export function registerPlaylistSyncIpc(
         | 'artist'
         | 'playlist'
       )[];
-      return await SpotifyApiExtractor.searchSpotify(query, searchTypes, 20);
+      return await SpotifyApiExtractor.searchSpotify(query, searchTypes, limit || 50);
     } catch (err: any) {
       console.error('Spotify search error:', err);
       throw new Error(err?.message || 'Spotify search failed');

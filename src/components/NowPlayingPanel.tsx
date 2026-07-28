@@ -1,9 +1,11 @@
-import { useEffect, useState, useRef } from 'react';
-import { usePlayerStore, useFavoritesStore, useSettingsStore } from '@/stores';
-import { X, MoreHorizontal, Share2, Heart, CheckCircle2, SkipForward, Mic2, ExternalLink } from 'lucide-react';
+import { useEffect, useState, useRef, useMemo } from 'react';
+import { usePlayerStore, useSettingsStore, useFavoritesStore } from '@/stores';
+import { X, SkipForward, Mic2, ExternalLink, Heart } from 'lucide-react';
 import { getImageUrl } from '@/utils';
 import { parseLyrics, findCurrentLyricIndex } from '@/services/lyricsParser';
 import { RomanizationService } from '@/modules/romanization/RomanizationService';
+import { LyricOffsetStore } from '@/services/lyricOffsetStore';
+import { motion } from 'framer-motion';
 import type { LyricsData } from '@/types';
 
 interface NowPlayingPanelProps {
@@ -12,12 +14,13 @@ interface NowPlayingPanelProps {
 
 export function NowPlayingPanel({ onClose }: NowPlayingPanelProps) {
   const { currentSong, currentTime, queue, queueIndex, playNext } = usePlayerStore();
+  const { lyricsDisplayMode, seekByLyricsEnabled } = useSettingsStore();
   const { isFavoriteSong, toggleFavoriteSong } = useFavoritesStore();
-  const { lyricsDisplayMode } = useSettingsStore();
 
   const [lyrics, setLyrics] = useState<LyricsData | null>(null);
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const lyricsContainerRef = useRef<HTMLDivElement>(null);
+  const lineRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   // Load lyrics when song changes
   useEffect(() => {
@@ -27,6 +30,8 @@ export function NowPlayingPanel({ onClose }: NowPlayingPanelProps) {
     }
 
     let cancelled = false;
+    lineRefs.current.clear();
+
     const loadLyrics = async () => {
       setLyricsLoading(true);
       setLyrics(null);
@@ -74,197 +79,247 @@ export function NowPlayingPanel({ onClose }: NowPlayingPanelProps) {
     };
   }, [currentSong?.id]);
 
+  // Find current lyric index taking per-song offset into account
+  const offset = currentSong ? LyricOffsetStore.getOffset(currentSong.id) : 0;
+  const currentIndex = useMemo(() => {
+    if (!lyrics?.synced) return -1;
+    return findCurrentLyricIndex(lyrics.lines, currentTime - offset);
+  }, [lyrics, currentTime, offset]);
+
+  // Auto-scroll active lyric line to ~35% from top (100% identical to LyricsView)
+  useEffect(() => {
+    if (currentIndex < 0 || !lyrics?.synced) return;
+
+    const element = lineRefs.current.get(currentIndex);
+    if (element && lyricsContainerRef.current) {
+      const container = lyricsContainerRef.current;
+      const containerHeight = container.clientHeight;
+      const elementTop = element.offsetTop;
+      const scrollTarget = elementTop - containerHeight * 0.35;
+
+      container.scrollTo({
+        top: Math.max(0, scrollTarget),
+        behavior: 'smooth',
+      });
+    }
+  }, [currentIndex, lyrics?.synced]);
+
+  const handleExpandLyrics = () => {
+    usePlayerStore.getState().toggleLyrics();
+  };
+
   if (!currentSong) return null;
 
   const coverSrc = currentSong.coverPath
     ? getImageUrl(currentSong.coverPath)
     : (currentSong.remoteCoverUrl || (currentSong as any).coverUrl || '/default-cover.png');
-  const isFav = isFavoriteSong(currentSong.id);
 
   // Next in queue
   const nextSong = queueIndex >= 0 && queueIndex < queue.length - 1 ? queue[queueIndex + 1] : null;
-
-  // Active lyric index
-  const activeIndex = lyrics ? findCurrentLyricIndex(lyrics.lines, currentTime) : -1;
-
-  // Scroll active lyric line into view in the side panel
-  useEffect(() => {
-    if (lyricsContainerRef.current && activeIndex >= 0) {
-      const activeEl = lyricsContainerRef.current.children[activeIndex] as HTMLElement;
-      if (activeEl) {
-        lyricsContainerRef.current.scrollTo({
-          top: activeEl.offsetTop - 40,
-          behavior: 'smooth',
-        });
-      }
-    }
-  }, [activeIndex, lyrics]);
-
-  const handleLyricsClick = () => {
-    usePlayerStore.getState().toggleLyrics();
-  };
+  const isFav = isFavoriteSong(currentSong.id);
 
   return (
-    <div className="h-full flex flex-col bg-zinc-950 text-text select-none border-l border-white/5">
-      {/* Header */}
+    <div className="h-full flex flex-col bg-[#131313] text-[#E5E2E1] select-none border-l border-white/5">
+      {/* Panel Header */}
       <div className="px-5 py-4 flex items-center justify-between border-b border-white/5">
-        <span className="text-xs font-bold tracking-wider uppercase text-text/50 truncate pr-4">
-          {currentSong.album || 'Now Playing'}
+        <span className="font-mono text-[11px] font-bold tracking-wider uppercase text-[#8B90A0]">
+          NOW PLAYING
         </span>
         <div className="flex items-center gap-1 shrink-0">
-          <button className="w-8 h-8 rounded-full flex items-center justify-center text-text/60 hover:text-text hover:bg-white/5 transition-colors">
-            <MoreHorizontal size={18} />
-          </button>
-          <button 
+          <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-text/60 hover:text-text hover:bg-white/5 transition-colors"
+            className="w-7 h-7 rounded-md flex items-center justify-center text-[#8B90A0] hover:text-white hover:bg-white/10 transition-all cursor-pointer"
           >
-            <X size={18} />
+            <X size={16} />
           </button>
         </div>
       </div>
 
       {/* Panel Scroll Content */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-5 scrollbar-none pb-24">
-        
-        {/* Large Cover Art */}
-        <div className="relative aspect-square w-full rounded-2xl overflow-hidden shadow-2xl bg-zinc-900 group">
-          <img 
-            src={coverSrc} 
-            alt={currentSong.album} 
+      <div className="flex-1 overflow-y-auto p-5 space-y-6 scrollbar-thin pb-28">
+        {/* Large Artwork */}
+        <div className="relative aspect-square w-full rounded-2xl overflow-hidden shadow-2xl bg-[#151518] border border-white/10 group">
+          <img
+            src={coverSrc}
+            alt={currentSong.album}
             referrerPolicy="no-referrer"
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             onError={(e) => {
               (e.target as HTMLImageElement).src = '/default-cover.png';
             }}
           />
         </div>
 
-        {/* Title and Artist Row */}
-        <div className="flex items-start justify-between py-1">
-          <div className="min-w-0 flex-1 pr-4">
-            <h2 className="text-xl font-bold tracking-tight text-text truncate hover:underline cursor-pointer">
+        {/* Title, Artist, & Audio Quality Spec Badge */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-lg font-bold tracking-tight text-white truncate hover:underline cursor-pointer flex-1">
               {currentSong.title}
             </h2>
-            <p className="text-sm text-text/65 mt-1 truncate hover:underline cursor-pointer">
-              {currentSong.artist}
-            </p>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => toggleFavoriteSong(currentSong.id)}
+                className={`p-1.5 rounded-full transition-colors cursor-pointer ${
+                  isFav ? 'text-[#0070F3]' : 'text-[#8B90A0] hover:text-white'
+                }`}
+                title={isFav ? 'Remove from Favorites' : 'Add to Favorites'}
+              >
+                <Heart size={18} fill={isFav ? 'currentColor' : 'none'} />
+              </button>
+              <span className="font-mono text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-white/20 bg-white/10 text-white">
+                FLAC
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button className="w-8 h-8 rounded-full flex items-center justify-center text-text/60 hover:text-text hover:bg-white/5 transition-colors">
-              <Share2 size={18} />
-            </button>
-            <button 
-              onClick={() => toggleFavoriteSong(currentSong.id)}
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                isFav ? 'text-primary' : 'text-text/60 hover:text-text hover:bg-white/5'
-              }`}
-            >
-              {isFav ? <CheckCircle2 size={18} fill="currentColor" className="text-zinc-950" /> : <Heart size={18} />}
-            </button>
-          </div>
+
+          <p className="text-xs text-[#9CA3AF] truncate hover:underline cursor-pointer">
+            {currentSong.artist}
+          </p>
         </div>
 
-        {/* Syncing Lyrics Card */}
+        {/* Syncing Lyrics Block (Synchronized to exact playing line) */}
         {!lyricsLoading && lyrics && (
-          <div 
-            onClick={handleLyricsClick}
-            className="bg-primary/10 hover:bg-primary/15 border border-primary/20 hover:border-primary/30 rounded-2xl p-4 cursor-pointer transition-all duration-300 group"
-          >
-            <div className="flex items-center justify-between mb-3 text-primary">
-              <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <Mic2 size={14} />
-                Lyrics
+          <div className="bg-[#151518] border border-white/5 hover:border-[#0070F3]/40 rounded-xl p-4 transition-all duration-200 group space-y-3">
+            <div className="flex items-center justify-between text-[#8B90A0]">
+              <span className="font-mono text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <Mic2 size={12} className="text-[#0070F3]" />
+                LYRICS
               </span>
-              <span className="text-[10px] text-primary/60 group-hover:text-primary transition-colors flex items-center gap-0.5">
-                Fullscreen
-                <ExternalLink size={10} className="ml-1" />
-              </span>
+              <button
+                onClick={handleExpandLyrics}
+                className="font-mono text-[10px] text-[#0070F3] hover:underline flex items-center gap-1 cursor-pointer"
+              >
+                Expand <ExternalLink size={10} />
+              </button>
             </div>
-            <div 
-              ref={lyricsContainerRef}
-              className="max-h-[140px] overflow-y-auto space-y-3 scrollbar-none pr-1 select-none pointer-events-none"
-            >
-              {lyrics.lines.map((line, index) => {
-                const isActive = index === activeIndex;
-                const mode = lyricsDisplayMode || 'both';
-                const displayText = mode === 'romanized' ? (line.romanization || line.text) : line.text;
-                
-                return (
-                  <p 
-                    key={index}
-                    className={`text-sm font-bold tracking-tight leading-snug transition-all duration-300 ${
-                      isActive 
-                        ? 'text-white scale-[1.02] origin-left' 
-                        : 'text-white/40'
-                    }`}
-                  >
-                    {displayText}
+
+            {/* Synced Lyrics Container */}
+            {lyrics.synced ? (
+              <div
+                ref={lyricsContainerRef}
+                className="relative max-h-[180px] overflow-y-auto space-y-3 scrollbar-none py-3 px-1 select-none"
+              >
+                {lyrics.lines.map((line, index) => {
+                  const isActive = index === currentIndex;
+                  const isPast = currentIndex >= 0 && index < currentIndex;
+                  const mode = lyricsDisplayMode || 'both';
+
+                  const displayText = mode === 'romanized'
+                    ? (line.romanization || line.text)
+                    : line.text;
+
+                  const showSubRomanization = mode === 'both' && !!line.romanization;
+
+                  return (
+                    <div
+                      key={`${line.time}-${index}`}
+                      ref={(el) => {
+                        if (el) lineRefs.current.set(index, el);
+                      }}
+                      className={`transition-all duration-300 transform origin-left space-y-1 py-0.5 ${
+                        seekByLyricsEnabled ? 'cursor-pointer hover:opacity-100' : 'cursor-default'
+                      }`}
+                      onClick={() => {
+                        if (seekByLyricsEnabled === false) return;
+                        const targetTime = Math.max(0, line.time + offset);
+                        usePlayerStore.getState().setCurrentTime(targetTime);
+                        window.dispatchEvent(new CustomEvent('player:seek', { detail: targetTime }));
+                      }}
+                    >
+                      {/* Primary Line */}
+                      <motion.p
+                        animate={{ opacity: isActive ? 1 : isPast ? 0.3 : 0.45 }}
+                        transition={{ duration: 0.25, ease: 'easeOut' }}
+                        className={`font-extrabold tracking-tight leading-relaxed transition-colors ${
+                          isActive
+                            ? 'text-white text-sm font-bold drop-shadow-[0_2px_8px_rgba(255,255,255,0.2)]'
+                            : 'text-[#8B90A0] text-xs font-semibold'
+                        }`}
+                      >
+                        {displayText || '♪'}
+                      </motion.p>
+
+                      {/* Sub Romanization Line (Both mode) */}
+                      {showSubRomanization && (
+                        <motion.p
+                          animate={{ opacity: isActive ? 0.85 : isPast ? 0.25 : 0.35 }}
+                          transition={{ duration: 0.25, ease: 'easeOut' }}
+                          className={`font-medium tracking-wide leading-relaxed ${
+                            isActive ? 'text-xs text-white/80' : 'text-[11px] text-[#8B90A0]/60'
+                          }`}
+                        >
+                          {line.romanization}
+                        </motion.p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* Unsynced Lyrics */
+              <div className="max-h-[160px] overflow-y-auto space-y-2 scrollbar-none text-left">
+                {lyrics.lines.map((line, index) => (
+                  <p key={index} className="text-xs font-medium text-[#8B90A0] leading-relaxed">
+                    {line.text || <>&nbsp;</>}
                   </p>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* Next Up Card */}
+        {/* Artist Credits Block */}
+        <div className="bg-[#151518] border border-white/5 rounded-xl p-4 space-y-2">
+          <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-[#8B90A0] block">
+            ARTIST CREDITS
+          </span>
+          <div>
+            <p className="text-xs font-bold text-white">
+              Produced by Carbon-14
+            </p>
+            <p className="text-[11px] text-[#9CA3AF] mt-0.5">
+              Primary Artist: {currentSong.artist}
+            </p>
+          </div>
+        </div>
+
+        {/* Next in Queue Card */}
         {nextSong && (
-          <div className="bg-white/[0.03] border border-white/5 rounded-2xl p-4">
-            <span className="text-xs font-bold text-text/40 uppercase tracking-wider block mb-3">
-              Next in Queue
+          <div className="bg-[#151518] border border-white/5 rounded-xl p-4 space-y-3">
+            <span className="font-mono text-[10px] font-bold text-[#8B90A0] uppercase tracking-wider block">
+              NEXT UP IN QUEUE
             </span>
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <img 
+                <img
                   src={nextSong.coverPath ? getImageUrl(nextSong.coverPath) : (nextSong.remoteCoverUrl || (nextSong as any).coverUrl || '/default-cover.png')}
                   alt={nextSong.title}
                   referrerPolicy="no-referrer"
-                  className="w-12 h-12 rounded-lg object-cover bg-zinc-800"
+                  className="w-10 h-10 rounded-lg object-cover bg-[#0B0B0D]"
                   onError={(e) => {
                     (e.target as HTMLImageElement).src = '/default-cover.png';
                   }}
                 />
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-text truncate">
+                  <p className="text-xs font-semibold text-white truncate">
                     {nextSong.title}
                   </p>
-                  <p className="text-xs text-text/50 truncate mt-0.5">
+                  <p className="text-[10px] font-mono text-[#8B90A0] truncate mt-0.5">
                     {nextSong.artist}
                   </p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={playNext}
-                className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 text-text/80 hover:text-text flex items-center justify-center shrink-0 transition-colors"
+                className="w-8 h-8 rounded-md bg-white/5 hover:bg-white/10 text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
                 title="Skip Next"
               >
-                <SkipForward size={16} />
+                <SkipForward size={14} />
               </button>
             </div>
           </div>
         )}
-
-        {/* About the Artist Card */}
-        <div className="bg-white/[0.03] border border-white/5 rounded-2xl overflow-hidden group/artist">
-          <div className="relative h-28 bg-zinc-900 overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent z-10" />
-            <img 
-              src={coverSrc}
-              alt=""
-              referrerPolicy="no-referrer"
-              className="w-full h-full object-cover blur-md scale-110 opacity-40"
-            />
-            <div className="absolute bottom-3 left-4 z-20">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-text/50">
-                Artist
-              </span>
-              <h3 className="text-base font-bold text-white mt-0.5 group-hover/artist:underline cursor-pointer">
-                {currentSong.artist}
-              </h3>
-            </div>
-          </div>
-        </div>
-
       </div>
     </div>
   );

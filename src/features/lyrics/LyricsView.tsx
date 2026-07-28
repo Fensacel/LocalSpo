@@ -3,7 +3,7 @@ import { usePlayerStore, useSettingsStore } from '@/stores';
 import { motion } from 'framer-motion';
 import { parseLyrics, findCurrentLyricIndex } from '@/services/lyricsParser';
 import type { LyricsData } from '@/types';
-import { Mic } from 'lucide-react';
+import { Mic, RefreshCw } from 'lucide-react';
 
 import { RomanizationService } from '@/modules/romanization/RomanizationService';
 import { LyricOffsetStore } from '@/services/lyricOffsetStore';
@@ -79,6 +79,39 @@ export function LyricsView() {
     };
   }, [currentSong?.id]);
 
+  const handleRefreshLyrics = async () => {
+    if (!currentSong) return;
+    setIsLoading(true);
+    try {
+      const dataPath = await window.electronAPI.app.getDataPath();
+      const cachedPath = await window.electronAPI.path.join(dataPath, 'cache', 'lyrics', `${currentSong.id}.txt`);
+      if (await window.electronAPI.fs.exists(cachedPath)) {
+        await window.electronAPI.fs.writeFile(cachedPath, 'RELOAD');
+      }
+      const result = await window.electronAPI.lyrics.read(
+        currentSong.id,
+        currentSong.path,
+        currentSong.lrcPath,
+        currentSong.hasEmbeddedLyrics,
+        currentSong.artist,
+        currentSong.title,
+        currentSong.album,
+        currentSong.duration
+      );
+      if (result && result.content) {
+        const parsed = parseLyrics(result.content, currentSong.artist);
+        setLyrics(parsed);
+        RomanizationService.clearCache(currentSong.id);
+        const processed = await RomanizationService.processLyrics(parsed, currentSong.id, true);
+        if (processed) setLyrics(processed);
+      }
+    } catch (err) {
+      console.error('Refresh lyrics error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Find current lyric index taking per-song offset into account
   const offset = currentSong ? LyricOffsetStore.getOffset(currentSong.id) : 0;
   const currentIndex = useMemo(() => {
@@ -147,24 +180,34 @@ export function LyricsView() {
             </div>
           )}
 
-          {/* Mode Selector Tab (Original | Romanization | Both) */}
-          {!isLoading && lyrics && lyrics.lines.some(l => l.romanization) && (
-            <div className="flex items-center justify-center mb-8 gap-2">
-              <div className="inline-flex items-center p-1 rounded-xl bg-white/[0.06] border border-white/10 backdrop-blur-md">
-                {(['original', 'romanized', 'both'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    onClick={() => updateSettings({ lyricsDisplayMode: mode })}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold capitalize transition-all duration-200 ${
-                      (lyricsDisplayMode || 'both') === mode
-                        ? 'bg-white text-black shadow-md'
-                        : 'text-white/60 hover:text-white'
-                    }`}
-                  >
-                    {mode === 'original' ? 'Original' : mode === 'romanized' ? 'Romanization' : 'Both'}
-                  </button>
-                ))}
-              </div>
+          {/* Mode Selector Tab & Reload Lyrics */}
+          {!isLoading && lyrics && (
+            <div className="flex items-center justify-center mb-8 gap-3">
+              {lyrics.lines.some((l) => l.romanization) && (
+                <div className="inline-flex items-center p-1 rounded-xl bg-white/[0.06] border border-white/10 backdrop-blur-md">
+                  {(['original', 'romanized', 'both'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      onClick={() => updateSettings({ lyricsDisplayMode: mode })}
+                      className={`px-3 py-1 rounded-lg text-xs font-semibold capitalize transition-all duration-200 cursor-pointer ${
+                        (lyricsDisplayMode || 'both') === mode
+                          ? 'bg-white text-black shadow-md'
+                          : 'text-white/60 hover:text-white'
+                      }`}
+                    >
+                      {mode === 'original' ? 'Original' : mode === 'romanized' ? 'Romanization' : 'Both'}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={handleRefreshLyrics}
+                title="Muat Ulang / Cari Ulang Lirik (Hangul/Original)"
+                className="p-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white/70 hover:text-white transition-all cursor-pointer flex items-center gap-1.5 text-xs font-medium"
+              >
+                <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+                <span>Reload Lyrics</span>
+              </button>
             </div>
           )}
 

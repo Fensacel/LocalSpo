@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
-import { useLibraryStore, usePlayerStore, usePlaylistStore } from '@/stores';
-import { Play, Music, ListMusic, ListPlus, Radio, Heart, Sparkles, RefreshCw, Plus, Clock } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { useLibraryStore, usePlayerStore, usePlaylistStore, useHistoryStore, useFavoritesStore } from '@/stores';
+import { Play, Pause, Music, ListPlus, Sparkles, RefreshCw, Plus, ListMusic, Heart } from 'lucide-react';
 import { SongContextMenu } from '@/components/SongContextMenu';
 import { ImportPlaylistModal } from '@/components/ImportPlaylistModal';
+import { SearchBar } from '@/components/SearchBar';
 import type { Song } from '@/types';
 
 import { useNavigate } from 'react-router-dom';
@@ -21,16 +22,85 @@ interface FeaturedTrack {
 export function HomePage() {
   const { songs } = useLibraryStore();
   const { playlists } = usePlaylistStore();
-  const { setQueue } = usePlayerStore();
+  const { currentSong, isPlaying, setIsPlaying, setQueue } = usePlayerStore();
+  const { entries: historyEntries, loadHistory } = useHistoryStore();
+  const { songIds, isFavoriteSong, toggleFavoriteSong } = useFavoritesStore();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<'all' | 'music' | 'stream' | 'local'>('all');
   const [featuredTracks, setFeaturedTracks] = useState<FeaturedTrack[]>([]);
   const [isLoadingFeatured, setIsLoadingFeatured] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ song: Song; x: number; y: number } | null>(null);
   const [showImportModal, setShowImportModal] = useState(false);
 
-  // Load live online streaming tracks from YouTube Music based on user playlist & library artists
+  // Load history entries on mount
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  // Dynamic Hero Banner Data: Prioritize currently playing/active song, fallback to featured track or local song
+  const heroDisplayTrack = useMemo(() => {
+    if (currentSong) {
+      const cover = currentSong.coverPath
+        ? getImageUrl(currentSong.coverPath)
+        : (currentSong.remoteCoverUrl || (currentSong as any).coverUrl || '/default-cover.png');
+      return {
+        title: currentSong.title,
+        artist: currentSong.artist,
+        album: currentSong.album || 'Single',
+        coverUrl: cover,
+        badge: isPlaying ? 'NOW PLAYING' : 'CURRENT TRACK',
+        badgeColor: isPlaying ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : 'bg-[#0070F3]/20 text-[#0070F3] border-[#0070F3]/30',
+        isCurrent: true,
+        rawSong: currentSong,
+        rawFeatured: null as FeaturedTrack | null,
+      };
+    }
+
+    if (featuredTracks.length > 0) {
+      const ft = featuredTracks[0];
+      return {
+        title: ft.title,
+        artist: ft.artist,
+        album: ft.album || 'Single',
+        coverUrl: ft.coverUrl,
+        badge: 'SPOTLIGHT TRACK',
+        badgeColor: 'bg-[#0070F3]/20 text-[#0070F3] border-[#0070F3]/30',
+        isCurrent: false,
+        rawSong: null as Song | null,
+        rawFeatured: ft,
+      };
+    }
+
+    if (songs.length > 0) {
+      const s = songs[0];
+      const cover = s.coverPath ? getImageUrl(s.coverPath) : '/default-cover.png';
+      return {
+        title: s.title,
+        artist: s.artist,
+        album: s.album || 'Single',
+        coverUrl: cover,
+        badge: 'LIBRARY HIGHLIGHT',
+        badgeColor: 'bg-[#0070F3]/20 text-[#0070F3] border-[#0070F3]/30',
+        isCurrent: false,
+        rawSong: s,
+        rawFeatured: null as FeaturedTrack | null,
+      };
+    }
+
+    return {
+      title: 'ECHOES OF THE NEON VOID',
+      artist: 'Nero Genesis',
+      album: 'Modular Reverb Edition',
+      coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=1600',
+      badge: 'FEATURED ARTIST',
+      badgeColor: 'bg-[#0070F3]/20 text-[#0070F3] border-[#0070F3]/30',
+      isCurrent: false,
+      rawSong: null as Song | null,
+      rawFeatured: null as FeaturedTrack | null,
+    };
+  }, [currentSong, isPlaying, featuredTracks, songs]);
+
+  // Load live online streaming tracks from YouTube Music
   useEffect(() => {
     let cancelled = false;
 
@@ -42,10 +112,8 @@ export function HomePage() {
           return;
         }
 
-        // Collect unique artists from user playlists and library
         const artistSet = new Set<string>();
 
-        // 1. Artists from playlists
         playlists.forEach((p) => {
           p.songIds.forEach((sid) => {
             const s = useLibraryStore.getState().getSongById(sid);
@@ -55,14 +123,12 @@ export function HomePage() {
           });
         });
 
-        // 2. Artists from local library
         songs.forEach((s) => {
           if (s.artist && s.artist.trim() && !/unknown|various/i.test(s.artist)) {
             artistSet.add(s.artist.trim());
           }
         });
 
-        // 3. User past search history
         try {
           const raw = localStorage.getItem('localspo_user_searches');
           if (raw) {
@@ -76,8 +142,6 @@ export function HomePage() {
         } catch {}
 
         const userArtists = Array.from(artistSet);
-
-        // Select queries: pick 2-3 random artists from user collection
         let targetQueries: string[] = [];
         if (userArtists.length > 0) {
           const shuffled = [...userArtists].sort(() => Math.random() - 0.5);
@@ -113,7 +177,6 @@ export function HomePage() {
 
         if (cancelled) return;
 
-        // Deduplicate tracks by videoId or title+artist
         const trackMap = new Map<string, FeaturedTrack>();
         for (const t of collectedTracks) {
           const key = (t.ytVideoId || `${t.title}-${t.artist}`).toLowerCase();
@@ -178,165 +241,303 @@ export function HomePage() {
     usePlayerStore.getState().addToQueue(streamSong);
   };
 
-  // Top 8 Grid Items for Spotify Header
-  const topGridItems: Array<{
-    title: string;
-    subtitle: string;
-    cover: string | null;
-    icon: any;
-    bg: string;
-    noPlay?: boolean;
-    action: () => void;
-  }> = [
-    {
-      title: 'Liked Songs',
-      subtitle: 'Playlist',
-      cover: null,
-      icon: Heart,
-      bg: 'from-purple-700 to-indigo-900',
-      action: () => navigate('/favorites'),
-    },
-    {
-      title: 'Local Files',
-      subtitle: `Folder • ${songs.length} tracks`,
-      cover: null,
-      icon: ListMusic,
-      bg: 'from-emerald-700 to-teal-900',
-      action: () => navigate('/songs'),
-    },
-    {
-      title: 'Recently Played',
-      subtitle: 'Listening History',
-      cover: null,
-      icon: Clock,
-      bg: 'from-blue-600 to-indigo-900',
-      noPlay: true,
-      action: () => navigate('/history'),
-    },
-    ...playlists.map((p) => ({
-      title: p.name,
-      subtitle: `Playlist • ${p.songIds.length} tracks`,
-      cover: p.coverPath ? getImageUrl(p.coverPath) : null,
-      icon: ListMusic,
-      bg: 'bg-[#282828]',
-      action: () => navigate(`/playlists/${p.id}`),
-    })),
-  ].slice(0, 8);
+  // Dynamic Continue Listening items from listening history (or fallback to local songs)
+  const continueListeningItems = useMemo(() => {
+    if (historyEntries.length > 0) {
+      const map = new Map<string, Song>();
+      for (const entry of historyEntries) {
+        if (entry.songData && !map.has(entry.songData.id)) {
+          map.set(entry.songData.id, entry.songData);
+        }
+      }
+      const uniqueSongs = Array.from(map.values()).slice(0, 3);
+      return uniqueSongs.map((s) => ({
+        song: s,
+        title: s.title,
+        artist: s.artist,
+        cover: s.coverPath ? getImageUrl(s.coverPath) : (s.remoteCoverUrl || (s as any).coverUrl || '/default-cover.png'),
+      }));
+    }
 
+    if (songs.length > 0) {
+      return songs.slice(0, 3).map((s) => ({
+        song: s,
+        title: s.title,
+        artist: s.artist,
+        cover: s.coverPath ? getImageUrl(s.coverPath) : '/default-cover.png',
+      }));
+    }
+
+    return [
+      { song: null as Song | null, title: 'No History Yet', artist: 'Play a song to record history', cover: '/default-cover.png' },
+    ];
+  }, [historyEntries, songs]);
+
+  // Dynamic Playlists list for "MADE FOR YOU"
+  const madeForYouPlaylists = useMemo(() => {
+    const list: Array<{
+      id: string;
+      title: string;
+      subtitle: string;
+      cover: string | null;
+      action: () => void;
+    }> = [
+      {
+        id: 'liked-songs',
+        title: 'Liked Songs',
+        subtitle: `${songIds.length} tracks`,
+        cover: null,
+        action: () => navigate('/favorites'),
+      },
+      {
+        id: 'local-files',
+        title: 'Local Files',
+        subtitle: `${songs.length} files`,
+        cover: null,
+        action: () => navigate('/songs'),
+      },
+      ...playlists.map((p) => ({
+        id: p.id,
+        title: p.name,
+        subtitle: `${p.songIds.length} tracks`,
+        cover: p.coverPath ? getImageUrl(p.coverPath) : null,
+        action: () => navigate(`/playlists/${p.id}`),
+      })),
+    ];
+
+    return list.slice(0, 6);
+  }, [songIds.length, songs.length, playlists, navigate]);
 
   return (
-    <div className="space-y-8 pb-10 select-none">
-      {/* Top Filter Chips */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveTab('all')}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-              activeTab === 'all' ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/15'
-            }`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setActiveTab('music')}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-              activeTab === 'music' ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/15'
-            }`}
-          >
-            Music
-          </button>
-          <button
-            onClick={() => setActiveTab('stream')}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 ${
-              activeTab === 'stream' ? 'bg-sky-400 text-black font-extrabold' : 'bg-sky-500/15 text-sky-400 hover:bg-sky-500/25'
-            }`}
-          >
-            <Radio size={13} /> Online Streaming
-          </button>
-          <button
-            onClick={() => setActiveTab('local')}
-            className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${
-              activeTab === 'local' ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/15'
-            }`}
-          >
-            Local Files ({songs.length})
-          </button>
-        </div>
+    <div className="space-y-8 pb-12 select-none">
+      {/* Search Bar & Import Playlist Header Row */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <SearchBar />
 
         <button
           onClick={() => setShowImportModal(true)}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 rounded-full text-xs font-extrabold text-sky-400 transition-all shadow-sm"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0070F3]/15 hover:bg-[#0070F3]/25 border border-[#0070F3]/40 rounded-md text-xs font-mono font-bold text-[#0070F3] transition-all cursor-pointer shadow-glow shrink-0"
         >
           <Plus size={14} />
-          Import Spotify Playlist
+          Import Playlist
         </button>
       </div>
 
-      {/* ── Spotify Desktop 8-Grid Cards (Top Row) ────────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {topGridItems.map((item, idx) => (
-          <div
-            key={idx}
-            onClick={item.action}
-            className="group relative flex items-center gap-3 bg-[#1e1e22]/70 hover:bg-[#2a2a30] transition-all rounded-lg overflow-hidden cursor-pointer p-0 h-14 pr-3 border border-white/5 shadow-sm"
-          >
-            <div className={`w-14 h-14 shrink-0 flex items-center justify-center overflow-hidden bg-gradient-to-br ${item.bg}`}>
-              {item.cover ? (
-                <img
-                  src={item.cover}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <item.icon size={22} className="text-white fill-white/20" />
-              )}
-            </div>
-            <span className="text-xs font-bold text-white truncate flex-1 leading-tight">
-              {item.title}
+      {/* ── DYNAMIC HERO BANNER ─────────────────────────────────── */}
+      <div className="relative rounded-2xl overflow-hidden bg-[#151518] border border-white/10 shadow-2xl min-h-[300px] flex flex-col justify-end p-6 md:p-8">
+        {/* Hero Background Art with Gradient Overlay */}
+        <div className="absolute inset-0 z-0">
+          <img
+            src={heroDisplayTrack.coverUrl}
+            alt=""
+            referrerPolicy="no-referrer"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = '/default-cover.png';
+            }}
+            className="w-full h-full object-cover filter brightness-60 contrast-110 blur-sm scale-105 transition-all duration-700"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#0B0B0D] via-[#0B0B0D]/85 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0B0B0D] via-transparent to-transparent" />
+        </div>
+
+
+
+        {/* Hero Content Block */}
+        <div className="relative z-10 max-w-2xl space-y-4">
+          <div className="flex items-center gap-2">
+            <span className={`font-mono text-[11px] font-bold tracking-wider uppercase px-2.5 py-0.5 rounded border ${heroDisplayTrack.badgeColor}`}>
+              {heroDisplayTrack.badge}
             </span>
-            {!item.noPlay && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  item.action();
-                }}
-                className="w-9 h-9 rounded-full bg-primary text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-lg hover:scale-105 shrink-0"
-              >
-                <Play size={16} className="fill-black ml-0.5" />
-              </button>
-            )}
           </div>
-        ))}
+
+          <div className="space-y-1">
+            <h1 className="text-3xl md:text-5xl font-extrabold text-white tracking-tight leading-none italic font-mono truncate max-w-xl">
+              {heroDisplayTrack.title}
+            </h1>
+            <p className="text-xs md:text-sm text-[#9CA3AF] max-w-lg leading-relaxed pt-1 font-mono">
+              {heroDisplayTrack.artist} • {heroDisplayTrack.album}
+            </p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={() => {
+                if (heroDisplayTrack.isCurrent) {
+                  setIsPlaying(!isPlaying);
+                  window.dispatchEvent(new CustomEvent('player:toggle'));
+                } else if (heroDisplayTrack.rawFeatured) {
+                  handlePlayStreamTrack(heroDisplayTrack.rawFeatured);
+                } else if (heroDisplayTrack.rawSong) {
+                  setQueue(songs, 0, 'Hero Featured');
+                } else if (featuredTracks.length > 0) {
+                  handlePlayStreamTrack(featuredTracks[0]);
+                }
+              }}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#0070F3] hover:bg-[#1B82FF] text-white font-mono text-xs font-bold uppercase rounded-md shadow-glow transition-all cursor-pointer"
+            >
+              {heroDisplayTrack.isCurrent && isPlaying ? (
+                <>
+                  <Pause size={15} fill="currentColor" />
+                  <span>PAUSE PLAYBACK</span>
+                </>
+              ) : (
+                <>
+                  <Play size={15} fill="currentColor" />
+                  <span>{heroDisplayTrack.isCurrent ? 'RESUME PLAYBACK' : 'LISTEN NOW'}</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={() => {
+                if (heroDisplayTrack.rawFeatured) {
+                  handleAddToQueueStreamTrack(heroDisplayTrack.rawFeatured, { stopPropagation: () => {} } as any);
+                } else if (heroDisplayTrack.rawSong) {
+                  usePlayerStore.getState().addToQueue(heroDisplayTrack.rawSong);
+                }
+              }}
+              className="w-9 h-9 rounded-md bg-white/10 hover:bg-white/20 border border-white/10 text-white flex items-center justify-center transition-all cursor-pointer"
+              title="Add to queue"
+            >
+              <Plus size={16} />
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* ── Section 1: Quick Picks (YouTube Music Style Grid) ─────────────── */}
-      {(activeTab === 'all' || activeTab === 'stream' || activeTab === 'music') && (
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
-                <Sparkles size={20} className="text-sky-400" />
-                Quick Picks
-              </h2>
-              <p className="text-xs text-text/40 mt-0.5">Lagu pilihan berdasarkan artis di playlist & pustaka Anda</p>
+      {/* ── SECTION 1: CONTINUE LISTENING ─────────────────────────────────── */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-xs font-bold uppercase tracking-wider text-white">
+            CONTINUE LISTENING
+          </span>
+          <button
+            onClick={() => navigate('/history')}
+            className="font-mono text-[11px] text-[#8B90A0] hover:text-white cursor-pointer uppercase"
+          >
+            HISTORY
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {continueListeningItems.map((item, idx) => (
+            <div
+              key={idx}
+              onClick={() => {
+                if (item.song) {
+                  setQueue([item.song], 0, 'History');
+                } else if (songs.length > 0) {
+                  setQueue(songs, idx % songs.length, 'Continue Listening');
+                }
+              }}
+              className="group flex items-center gap-3 p-3 bg-[#151518] hover:bg-[#1A1A1E] border border-white/5 hover:border-white/15 rounded-xl transition-all cursor-pointer shadow-sm"
+            >
+              <img
+                src={item.cover}
+                alt=""
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = '/default-cover.png';
+                }}
+                className="w-12 h-12 rounded-lg object-cover shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-white group-hover:text-[#0070F3] transition-colors truncate">
+                  {item.title}
+                </p>
+                <p className="text-[11px] font-mono text-[#8B90A0] truncate mt-0.5">
+                  {item.artist}
+                </p>
+              </div>
             </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── SECTION 2: MADE FOR YOU (Playlists Grid) ────────────────────────── */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="font-mono text-xs font-bold uppercase tracking-wider text-white">
+            MADE FOR YOU
+          </span>
+          <button
+            onClick={() => navigate('/songs')}
+            className="font-mono text-[11px] text-[#8B90A0] hover:text-white cursor-pointer uppercase"
+          >
+            PLAYLISTS
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+          {madeForYouPlaylists.map((pl) => (
+            <div
+              key={pl.id}
+              onClick={pl.action}
+              className="group bg-[#151518] hover:bg-[#1C1B1B] p-2.5 rounded-xl border border-white/5 transition-all duration-200 cursor-pointer flex flex-col shadow-sm"
+            >
+              <div className="relative aspect-square w-full rounded-lg overflow-hidden mb-2 bg-[#0B0B0D] flex items-center justify-center border border-white/5">
+                {pl.cover ? (
+                  <img
+                    src={pl.cover}
+                    alt={pl.title}
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = '/default-cover.png';
+                    }}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-[#0070F3]/30 to-indigo-900/40">
+                    <ListMusic size={24} className="text-[#0070F3]" />
+                  </div>
+                )}
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    pl.action();
+                  }}
+                  className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-[#0070F3] text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-glow hover:scale-105 cursor-pointer"
+                >
+                  <Play size={14} fill="currentColor" className="ml-0.5" />
+                </button>
+              </div>
+
+              <h3 className="text-xs font-bold text-white group-hover:text-[#0070F3] transition-colors truncate">
+                {pl.title}
+              </h3>
+              <p className="text-[11px] font-mono text-[#8B90A0] truncate mt-0.5">
+                {pl.subtitle}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── SECTION 3: QUICK PICKS (Live Online Streaming Tracks) ─────────────── */}
+      <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="font-mono text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+              <Sparkles size={16} className="text-[#0070F3]" />
+              QUICK PICKS
+            </span>
             <button
               onClick={() => navigate('/search')}
-              className="text-xs font-bold text-text/50 hover:text-white transition-colors uppercase tracking-wider"
+              className="font-mono text-[11px] text-[#8B90A0] hover:text-white uppercase tracking-wider cursor-pointer"
             >
-              Show all
+              SHOW ALL
             </button>
           </div>
 
           {isLoadingFeatured && featuredTracks.length === 0 ? (
-            <div className="flex items-center justify-center h-32 text-text/40 text-xs gap-2">
-              <RefreshCw size={16} className="animate-spin text-sky-400" />
+            <div className="flex items-center justify-center h-28 text-[#8B90A0] text-xs font-mono gap-2">
+              <RefreshCw size={15} className="animate-spin text-[#0070F3]" />
               Loading Quick Picks...
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-4 gap-y-3">
-              {featuredTracks.slice(0, 12).map((track) => (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {featuredTracks.slice(0, 9).map((track) => (
                 <div
                   key={track.ytVideoId || track.id}
                   onClick={() => handlePlayStreamTrack(track)}
@@ -355,10 +556,9 @@ export function HomePage() {
                     });
                     setContextMenu({ song: streamSong, x: e.clientX, y: e.clientY });
                   }}
-                  className="group flex items-center gap-3.5 p-2.5 bg-[#18181c] hover:bg-[#24242a] border border-white/5 hover:border-white/10 rounded-xl transition-all duration-200 cursor-pointer shadow-sm"
+                  className="group flex items-center gap-3 p-2.5 bg-[#151518] hover:bg-[#1C1B1B] border border-white/5 hover:border-white/10 rounded-xl transition-all duration-200 cursor-pointer shadow-sm"
                 >
-                  {/* Compact Square Thumbnail */}
-                  <div className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-white/5 shadow-sm">
+                  <div className="relative w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-white/5 shadow-sm">
                     <img
                       src={track.coverUrl}
                       alt=""
@@ -377,68 +577,90 @@ export function HomePage() {
                         e.stopPropagation();
                         handlePlayStreamTrack(track);
                       }}
-                      className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white"
+                      className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white cursor-pointer"
                     >
-                      <Play size={16} className="fill-white ml-0.5" />
+                      <Play size={15} fill="currentColor" className="ml-0.5" />
                     </button>
                   </div>
 
-                  {/* Title & Artist/Album Subtitle */}
                   <div className="min-w-0 flex-1">
-                    <h3 className="text-xs font-bold text-white group-hover:text-primary transition-colors truncate leading-snug">
+                    <h3 className="text-xs font-bold text-white group-hover:text-[#0070F3] transition-colors truncate leading-tight">
                       {track.title}
                     </h3>
-                    <p className="text-[11px] text-text/45 truncate mt-0.5">
-                      {track.artist} {track.album ? `• ${track.album}` : ''}
+                    <p className="text-[11px] font-mono text-[#8B90A0] truncate mt-0.5">
+                      {track.artist}
                     </p>
                   </div>
 
-                  {/* Add to Queue Button */}
-                  <div className="shrink-0 flex items-center">
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const trackId = track.ytVideoId || track.id;
+                        if (!trackId) return;
+                        const sId = `stream_${trackId}`;
+                        const isF = isFavoriteSong(sId);
+                        if (!isF) {
+                          const streamSong = createStreamSong({
+                            id: sId,
+                            title: track.title,
+                            artist: track.artist,
+                            album: track.album,
+                            duration: 180,
+                            coverUrl: track.coverUrl,
+                            ytVideoId: track.ytVideoId || '',
+                          });
+                          useLibraryStore.getState().addStreamSong(streamSong);
+                        }
+                        toggleFavoriteSong(sId);
+                      }}
+                      title={isFavoriteSong(`stream_${track.ytVideoId || track.id}`) ? 'Remove from Favorites' : 'Add to Favorites'}
+                      className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                        isFavoriteSong(`stream_${track.ytVideoId || track.id}`)
+                          ? 'text-[#0070F3]'
+                          : 'text-[#8B90A0] hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      <Heart size={15} fill={isFavoriteSong(`stream_${track.ytVideoId || track.id}`) ? 'currentColor' : 'none'} />
+                    </button>
+
                     <button
                       onClick={(e) => handleAddToQueueStreamTrack(track, e)}
                       title="Add to queue"
-                      className="p-1 rounded-lg text-text/40 hover:text-sky-400 hover:bg-white/5 transition-all opacity-0 group-hover:opacity-100"
+                      className="p-1.5 rounded-md text-[#8B90A0] hover:text-[#0070F3] hover:bg-white/5 transition-all cursor-pointer"
                     >
                       <ListPlus size={15} />
                     </button>
                   </div>
-
-
                 </div>
               ))}
             </div>
           )}
         </section>
-      )}
 
-
-
-
-      {/* ── Section 3: Your Local Library ──────────────────────────────────── */}
-      {(activeTab === 'all' || activeTab === 'local') && (
-        <section className="space-y-4">
+      {/* ── SECTION 4: LOCAL LIBRARY ───────────────────────────────────────── */}
+      <section className="space-y-3">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
-              <Music size={20} className="text-emerald-400" />
-              Your Local Library ({songs.length})
-            </h2>
+            <span className="font-mono text-xs font-bold uppercase tracking-wider text-white flex items-center gap-2">
+              <Music size={16} className="text-emerald-400" />
+              LOCAL LIBRARY ({songs.length})
+            </span>
             {songs.length > 0 && (
               <button
                 onClick={() => navigate('/songs')}
-                className="text-xs font-bold text-text/50 hover:text-white transition-colors uppercase tracking-wider"
+                className="font-mono text-[11px] text-[#8B90A0] hover:text-white uppercase tracking-wider cursor-pointer"
               >
-                Show all
+                SHOW ALL
               </button>
             )}
           </div>
 
           {songs.length === 0 ? (
-            <div className="p-6 rounded-2xl bg-[#121214] border border-white/5 flex flex-col items-center justify-center text-center gap-3">
-              <Music size={32} className="text-text/20" />
+            <div className="p-6 rounded-xl bg-[#151518] border border-white/5 flex flex-col items-center justify-center text-center gap-3">
+              <Music size={28} className="text-[#8B90A0]/40" />
               <div>
-                <p className="text-sm font-bold text-white">No local music files scanned yet</p>
-                <p className="text-xs text-text/40 mt-1">Add a music folder to scan your local MP3, FLAC, and M4A files</p>
+                <p className="text-xs font-bold text-white font-mono">No local music files scanned yet</p>
+                <p className="text-[11px] text-[#8B90A0] mt-1 font-mono">Add a local folder to scan MP3, FLAC, and M4A files</p>
               </div>
               <button
                 onClick={async () => {
@@ -447,14 +669,14 @@ export function HomePage() {
                     window.dispatchEvent(new CustomEvent('scan-folder', { detail: folder }));
                   }
                 }}
-                className="flex items-center gap-2 px-4 py-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 rounded-xl text-xs font-bold transition-all"
+                className="flex items-center gap-2 px-3.5 py-1.5 bg-[#0070F3]/20 hover:bg-[#0070F3]/30 text-[#0070F3] border border-[#0070F3]/30 rounded-md text-xs font-mono font-bold transition-all cursor-pointer"
               >
-                <Plus size={15} />
-                Add Local Music Folder
+                <Plus size={14} />
+                Add Folder
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
               {songs.slice(0, 12).map((song) => (
                 <div
                   key={song.id}
@@ -466,26 +688,25 @@ export function HomePage() {
                     e.preventDefault();
                     setContextMenu({ song, x: e.clientX, y: e.clientY });
                   }}
-                  className="group bg-[#18181c] hover:bg-[#232329] p-3 rounded-xl transition-all duration-200 cursor-pointer flex flex-col border border-white/5"
+                  className="group bg-[#151518] hover:bg-[#1C1B1B] p-3 rounded-xl transition-all duration-200 cursor-pointer flex flex-col border border-white/5 shadow-sm"
                 >
-                  <div className="relative aspect-square rounded-lg overflow-hidden mb-3 bg-white/5 flex items-center justify-center">
+                  <div className="relative aspect-square rounded-lg overflow-hidden mb-2.5 bg-white/5 flex items-center justify-center">
                     {song.coverPath ? (
                       <img src={getImageUrl(song.coverPath) || ''} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <Music size={24} className="text-white/20" />
+                      <Music size={22} className="text-white/20" />
                     )}
-                    <button className="absolute bottom-2 right-2 w-9 h-9 rounded-full bg-primary text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-xl">
-                      <Play size={16} className="fill-black ml-0.5" />
+                    <button className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-[#0070F3] text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all shadow-glow">
+                      <Play size={14} fill="currentColor" className="ml-0.5" />
                     </button>
                   </div>
                   <h3 className="text-xs font-bold text-white truncate">{song.title}</h3>
-                  <p className="text-[11px] text-text/40 truncate mt-0.5">{song.artist}</p>
+                  <p className="text-[11px] font-mono text-[#8B90A0] truncate mt-0.5">{song.artist}</p>
                 </div>
               ))}
             </div>
           )}
         </section>
-      )}
 
       {contextMenu && (
         <SongContextMenu

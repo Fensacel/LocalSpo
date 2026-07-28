@@ -224,6 +224,7 @@ export interface Settings {
   equalizerBands: number[];
   volume: number;
   playbackSpeed: number;
+  autoplay?: boolean;
 }
 
 // ─── Enums ──────────────────────────────────────────────

@@ -26,6 +26,7 @@ const defaultSettings: Settings = {
   equalizerBands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
   volume: 0.8,
   playbackSpeed: 1,
+  autoplay: true,
 };
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({

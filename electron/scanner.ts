@@ -726,11 +726,21 @@ export function registerScannerIpc(getDataPath: () => string): void {
       const cachedContent = fs.readFileSync(cachedPath, 'utf-8');
       const isSongChinese = /[\u4e00-\u9fa5]/.test(artist || '');
       const cacheHasChinese = /[\u4e00-\u9fa5]{3,}/.test(cachedContent);
+      
+      const isSongKorean = /[\uac00-\ud7a3]/.test(artist || '') || /(ILLIT|NewJeans|TWICE|BTS|BLACKPINK|IVE|LE SSERAFIM|aespa|Stray Kids|ENHYPEN|SEVENTEEN|ITZY|NMIXX|Red Velvet|NCT|EXO|TXT|FIFTY FIFTY|BABYMONSTER|KISS OF LIFE|tripleS|Hearts2Hearts|Ines Hall|IU|Taeyeon|Baekhyun|Jungkook|Jimin|V|RM|Suga|J-Hope|Jin|Rosé|Jennie|Lisa|Jisoo)/i.test(artist || '');
+      const cacheHasHangul = /[\uac00-\ud7a3]/.test(cachedContent);
+
       // Detect garbled/corrupt encoding — replacement chars (U+FFFD) or control chars in first 100 chars
       const hasGarbledChars = /[\ufffd\u0000-\u0008\u000e-\u001f\u007f-\u009f]/.test(cachedContent.slice(0, 200));
 
-      if (hasGarbledChars || (!isSongChinese && cacheHasChinese) || cachedContent.startsWith('NO_LYRICS') || cachedContent.trim().length <= 10) {
-        console.warn(`[LyricsEngine] Invalidating bad/corrupt cached lyrics for: ${artist} - ${title}`);
+      if (
+        hasGarbledChars ||
+        (!isSongChinese && cacheHasChinese) ||
+        (isSongKorean && !cacheHasHangul) ||
+        cachedContent.startsWith('NO_LYRICS') ||
+        cachedContent.trim().length <= 10
+      ) {
+        console.warn(`[LyricsEngine] Invalidating bad/corrupt/English-only cached lyrics for: ${artist} - ${title}`);
         try {
           fs.unlinkSync(cachedPath);
         } catch {}

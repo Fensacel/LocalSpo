@@ -248,37 +248,52 @@ export class LyricsApi {
       this.fetchNetease(primaryArtist, cleanTitle),
     ]);
 
-    // Priority 1: Synced lyrics from LRCLIB
-    if (lrclibRes.status === 'fulfilled' && lrclibRes.value?.syncedLyrics) {
-      console.log(`[LyricsApi] Selected LRCLIB Synced for: ${primaryArtist} - ${cleanTitle}`);
-      return lrclibRes.value;
+    const validResults = [
+      neteaseRes.status === 'fulfilled' ? neteaseRes.value : null,
+      lrclibRes.status === 'fulfilled' ? lrclibRes.value : null,
+      musixmatchRes.status === 'fulfilled' ? musixmatchRes.value : null,
+    ].filter(Boolean) as LyricsResult[];
+
+    // Priority 1: Any provider returning Synced Lyrics with Original Hangul!
+    const hangulSynced = validResults.find(
+      (r) => r.syncedLyrics && /[\uac00-\ud7a3]/.test(r.syncedLyrics)
+    );
+    if (hangulSynced) {
+      console.log(`[LyricsApi] Selected Original Hangul Synced Lyrics for: ${primaryArtist} - ${cleanTitle}`);
+      return hangulSynced;
     }
 
-    // Priority 2: Synced lyrics from Musixmatch
-    if (musixmatchRes.status === 'fulfilled' && musixmatchRes.value?.syncedLyrics) {
-      console.log(`[LyricsApi] Selected Musixmatch Synced for: ${primaryArtist} - ${cleanTitle}`);
-      return musixmatchRes.value;
-    }
-
-    // Priority 3: Synced lyrics from NetEase
+    // Priority 2: NetEase Synced (NetEase has authentic original lyrics for K-Pop / Asian songs)
     if (neteaseRes.status === 'fulfilled' && neteaseRes.value?.syncedLyrics) {
       console.log(`[LyricsApi] Selected NetEase Synced for: ${primaryArtist} - ${cleanTitle}`);
       return neteaseRes.value;
     }
 
-    // Priority 4: Plain lyrics from LRCLIB
+    // Priority 3: LRCLIB Synced
+    if (lrclibRes.status === 'fulfilled' && lrclibRes.value?.syncedLyrics) {
+      console.log(`[LyricsApi] Selected LRCLIB Synced for: ${primaryArtist} - ${cleanTitle}`);
+      return lrclibRes.value;
+    }
+
+    // Priority 4: Musixmatch Synced
+    if (musixmatchRes.status === 'fulfilled' && musixmatchRes.value?.syncedLyrics) {
+      console.log(`[LyricsApi] Selected Musixmatch Synced for: ${primaryArtist} - ${cleanTitle}`);
+      return musixmatchRes.value;
+    }
+
+    // Priority 5: Plain lyrics from LRCLIB
     if (lrclibRes.status === 'fulfilled' && lrclibRes.value?.plainLyrics) {
       console.log(`[LyricsApi] Selected LRCLIB Plain for: ${primaryArtist} - ${cleanTitle}`);
       return lrclibRes.value;
     }
 
-    // Priority 5: Plain lyrics from Musixmatch
+    // Priority 6: Plain lyrics from Musixmatch
     if (musixmatchRes.status === 'fulfilled' && musixmatchRes.value?.plainLyrics) {
       console.log(`[LyricsApi] Selected Musixmatch Plain for: ${primaryArtist} - ${cleanTitle}`);
       return musixmatchRes.value;
     }
 
-    // Priority 6: Lyrics.ovh Fallback
+    // Priority 7: Lyrics.ovh Fallback
     const ovhResult = await this.fetchLyricsOvh(primaryArtist, cleanTitle);
     if (ovhResult) return ovhResult;
 
@@ -302,7 +317,7 @@ export class LyricsApi {
     title: string,
     durationSeconds?: number
   ): Promise<LyricsResult | null> {
-    // 1. Direct GET without duration (most reliable)
+    // 1. Direct GET without duration
     try {
       const getUrl = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(
         artist
@@ -314,11 +329,14 @@ export class LyricsApi {
       if (res.ok) {
         const data: any = await res.json();
         if (data && (data.syncedLyrics || data.plainLyrics)) {
-          return {
-            syncedLyrics: data.syncedLyrics || null,
-            plainLyrics: data.plainLyrics || null,
-            source: 'lrclib',
-          };
+          // If direct GET returned Hangul, return immediately!
+          if (/[\uac00-\ud7a3]/.test(data.syncedLyrics || data.plainLyrics || '')) {
+            return {
+              syncedLyrics: data.syncedLyrics || null,
+              plainLyrics: data.plainLyrics || null,
+              source: 'lrclib',
+            };
+          }
         }
       }
     } catch {}
@@ -336,17 +354,19 @@ export class LyricsApi {
         if (res.ok) {
           const data: any = await res.json();
           if (data && (data.syncedLyrics || data.plainLyrics)) {
-            return {
-              syncedLyrics: data.syncedLyrics || null,
-              plainLyrics: data.plainLyrics || null,
-              source: 'lrclib',
-            };
+            if (/[\uac00-\ud7a3]/.test(data.syncedLyrics || data.plainLyrics || '')) {
+              return {
+                syncedLyrics: data.syncedLyrics || null,
+                plainLyrics: data.plainLyrics || null,
+                source: 'lrclib',
+              };
+            }
           }
         }
       } catch {}
     }
 
-    // 3. Search query
+    // 3. Search query (Preferring candidate containing Hangul characters)
     try {
       const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(`${artist} ${title}`)}`;
       const res = await fetch(searchUrl, {
@@ -356,7 +376,13 @@ export class LyricsApi {
       if (res.ok) {
         const results = (await res.json()) as any[];
         if (Array.isArray(results) && results.length > 0) {
-          const candidate = results.find(
+          const hangulCandidate = results.find(
+            (r) =>
+              (r.syncedLyrics || r.plainLyrics) &&
+              this.isArtistMatch(r.artistName, artist) &&
+              /[\uac00-\ud7a3]/.test(r.syncedLyrics || r.plainLyrics || '')
+          );
+          const candidate = hangulCandidate || results.find(
             (r) => (r.syncedLyrics || r.plainLyrics) && this.isArtistMatch(r.artistName, artist)
           );
           if (candidate) {

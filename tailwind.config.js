@@ -5,34 +5,41 @@ export default {
     extend: {
       colors: {
         bg: {
-          DEFAULT: '#09090b',
-          surface: '#18181b',
-          card: 'rgba(24,24,27,0.65)',
+          DEFAULT: '#0B0B0D',
+          surface: '#131313',
+          card: '#151518',
+          subtle: '#1C1B1B',
+          high: '#201F1F',
         },
         primary: {
-          DEFAULT: '#ffffff',
-          hover: '#e4e4e7',
-          light: '#f4f4f5',
-          glow: 'rgba(255,255,255,0.4)',
+          DEFAULT: '#0070F3',
+          hover: '#1B82FF',
+          light: '#3B82F6',
+          glow: 'rgba(0, 112, 243, 0.4)',
         },
-        accent: '#ffffff',
+        accent: '#3B82F6',
         text: {
-          DEFAULT: '#F8FAFC',
-          secondary: '#a1a1aa',
-          muted: '#71717a',
+          DEFAULT: '#E5E2E1',
+          secondary: '#9CA3AF',
+          muted: '#8B90A0',
         },
-        border: 'rgba(255,255,255,0.08)',
-        danger: '#EF4444',
+        border: {
+          DEFAULT: 'rgba(255, 255, 255, 0.05)',
+          subtle: '#222222',
+          strong: '#E2E2E2',
+        },
+        danger: '#FFB4AB',
         success: '#22C55E',
         warning: '#FACC15',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['Inter', '-apple-system', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
       },
       borderRadius: {
-        card: '24px',
-        button: '16px',
-        cover: '32px',
+        card: '16px',
+        button: '8px',
+        cover: '16px',
       },
       backdropBlur: {
         glass: '30px',
@@ -47,8 +54,8 @@ export default {
       },
       keyframes: {
         'glow-pulse': {
-          '0%, 100%': { boxShadow: '0 0 20px rgba(255,255,255,0.1)' },
-          '50%': { boxShadow: '0 0 40px rgba(255,255,255,0.25)' },
+          '0%, 100%': { boxShadow: '0 0 20px rgba(0, 112, 243, 0.2)' },
+          '50%': { boxShadow: '0 0 40px rgba(0, 112, 243, 0.4)' },
         },
         'fade-in': {
           from: { opacity: '0' },
@@ -64,13 +71,11 @@ export default {
         },
       },
       boxShadow: {
-        glow: '0 0 20px rgba(255,255,255,0.1)',
-        'glow-lg': '0 0 40px rgba(255,255,255,0.15)',
-        'glow-xl': '0 0 60px rgba(255,255,255,0.2)',
-        glass: '0 8px 32px rgba(0,0,0,0.4)',
+        glow: '0 0 25px rgba(0, 112, 243, 0.35)',
+        'glow-lg': '0 0 45px rgba(0, 112, 243, 0.45)',
+        glass: '0 8px 32px rgba(0,0,0,0.6)',
       },
     },
   },
   plugins: [],
 };
-

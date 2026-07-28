@@ -25,15 +25,15 @@ export function MainLayout() {
   const showLyrics = usePlayerStore((s) => s.showLyrics);
   const showQueue = usePlayerStore((s) => s.showQueue);
   const toggleQueue = usePlayerStore((s) => s.toggleQueue);
-  const [bgColor, setBgColor] = useState<[number, number, number]>([110, 110, 110]);
+  const [bgColor, setBgColor] = useState<[number, number, number]>([0, 112, 243]);
 
-  // Dynamic background based on album cover
+  // Dynamic ambient background color extraction from album cover
   useEffect(() => {
     if (currentSong?.coverPath) {
       const src = getImageUrl(currentSong.coverPath);
       extractDominantColor(src).then(setBgColor);
     } else {
-      setBgColor([110, 110, 110]);
+      setBgColor([0, 112, 243]);
     }
   }, [currentSong?.coverPath]);
 
@@ -43,49 +43,49 @@ export function MainLayout() {
   }, [location.pathname]);
 
   return (
-    <div className="w-full h-full flex flex-col relative overflow-hidden bg-[#09090b]">
-      {/* Dynamic background overlay */}
+    <div className="w-full h-full flex flex-col relative overflow-hidden bg-[#0B0B0D] text-[#E5E2E1]">
+      {/* Subtle dynamic ambient background glow */}
       <motion.div
-        className="absolute inset-0 pointer-events-none z-0"
+        className="absolute inset-0 pointer-events-none z-0 opacity-40"
         animate={{
-          background: `radial-gradient(ellipse at 30% 20%, rgba(${bgColor[0]},${bgColor[1]},${bgColor[2]},0.12) 0%, transparent 60%)`,
+          background: `radial-gradient(ellipse at 50% 10%, rgba(${bgColor[0]},${bgColor[1]},${bgColor[2]},0.12) 0%, transparent 70%)`,
         }}
-        transition={{ duration: 0.7 }}
+        transition={{ duration: 0.8 }}
       />
 
-      {/* Desktop Titlebar (Hidden on Mobile) */}
+      {/* Top Titlebar */}
       <Titlebar />
 
       {/* Mobile Top App Bar */}
       <MobileTopAppBar />
 
-      {/* Main content area */}
-      <div className="flex flex-1 min-h-0 relative z-10">
-        {/* Sidebar (Desktop Only) */}
+      {/* Three-Column Desktop Layout */}
+      <div className="flex flex-1 min-h-0 relative z-10 overflow-hidden">
+        {/* LEFT COLUMN: Sidebar Navigation */}
         <Sidebar />
 
-        {/* Content */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden relative">
+        {/* CENTER COLUMN: Main Content Outlet */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden relative scrollbar-thin">
           <AnimatePresence mode="wait">
             {showLyrics ? (
               <motion.div
                 key="lyrics-view"
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.25, ease: 'easeOut' }}
-                className="absolute inset-0 z-10"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="absolute inset-0 z-10 p-4 md:p-6"
               >
                 <LyricsView />
               </motion.div>
             ) : (
               <motion.div
                 key={location.pathname}
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }}
-                transition={{ duration: 0.2, ease: 'easeOut' }}
-                className="p-4 pb-[150px] md:p-6 md:pb-4"
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+                className="p-4 pb-[130px] md:p-6 md:pb-[140px]"
               >
                 <Outlet />
               </motion.div>
@@ -93,34 +93,34 @@ export function MainLayout() {
           </AnimatePresence>
         </main>
 
-        {/* Queue Sidebar */}
+        {/* RIGHT COLUMN OPTIONS: Queue Panel / Now Playing Panel */}
         <AnimatePresence>
           {showQueue && (
             <motion.aside
               initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 320, opacity: 1 }}
+              animate={{ width: 340, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="h-full border-l border-white/5 bg-white/[0.01] backdrop-blur-md flex flex-col shrink-0 overflow-hidden relative z-20"
+              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+              className="h-full border-l border-white/5 bg-[#131313]/95 backdrop-blur-xl flex flex-col shrink-0 overflow-hidden z-20"
             >
-              <div className="w-[320px] h-full flex flex-col">
+              <div className="w-[340px] h-full flex flex-col">
                 <QueuePanel onClose={toggleQueue} />
               </div>
             </motion.aside>
           )}
         </AnimatePresence>
 
-        {/* Now Playing Sidebar */}
+        {/* RIGHT COLUMN: Dedicated Now Playing Panel */}
         <AnimatePresence>
           {showNowPlayingSidebar && (
             <motion.aside
               initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 320, opacity: 1 }}
+              animate={{ width: 360, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="h-full border-l border-white/5 bg-white/[0.01] backdrop-blur-md flex flex-col shrink-0 overflow-hidden relative z-20"
+              transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+              className="h-full border-l border-white/5 bg-[#131313]/95 backdrop-blur-xl flex flex-col shrink-0 overflow-hidden z-20"
             >
-              <div className="w-[320px] h-full flex flex-col">
+              <div className="w-[360px] h-full flex flex-col">
                 <NowPlayingPanel onClose={toggleNowPlayingSidebar} />
               </div>
             </motion.aside>
@@ -128,22 +128,18 @@ export function MainLayout() {
         </AnimatePresence>
       </div>
 
-      {/* Mini Player */}
+      {/* BOTTOM FLOATING PLAYER */}
       <AnimatePresence>{currentSong && !showNowPlaying && <MiniPlayer />}</AnimatePresence>
 
-      {/* Mobile Native Bottom Navigation */}
+      {/* Mobile Bottom Nav */}
       <MobileBottomNav />
 
-      {/* Now Playing Fullscreen Overlay */}
+      {/* Fullscreen Now Playing Overlay */}
       <AnimatePresence>{showNowPlaying && <NowPlayingOverlay />}</AnimatePresence>
 
-      {/* Global Toast Alerts */}
+      {/* Toast Alerts & Modals */}
       <ToastContainer />
-
-      {/* Auto Update Popup Modal */}
       <UpdateModal />
-
-      {/* What's New Release Notes Modal */}
       <WhatsNewModal />
     </div>
   );

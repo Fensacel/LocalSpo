@@ -82,7 +82,6 @@ export function SongsPage() {
         if (index < 0) {
           index = 0;
         }
-        console.log('Playing', sortedSongs[index]);
         setQueue(sortedSongs, index, 'Songs');
       }
     },
@@ -136,12 +135,12 @@ export function SongsPage() {
   };
 
   return (
-    <div ref={listRef}>
+    <div ref={listRef} className="select-none">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Songs</h1>
-          <p className="text-sm text-text/40 mt-1">
-            {songs.length} song{songs.length !== 1 ? 's' : ''}
+          <h1 className="text-2xl font-extrabold text-white font-mono uppercase tracking-tight">Library Songs</h1>
+          <p className="text-xs font-mono text-[#8B90A0] mt-1">
+            {songs.length} song{songs.length !== 1 ? 's' : ''} in local library
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -149,7 +148,7 @@ export function SongsPage() {
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setShowSortDropdown(!showSortDropdown)}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl glass text-xs font-semibold hover:bg-white/5 transition-all text-text/60 hover:text-text select-none border border-white/5"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-[#151518] text-xs font-mono font-bold hover:bg-[#1C1B1B] transition-all text-[#8B90A0] hover:text-white border border-white/5 cursor-pointer"
               >
                 <span>{getSortLabel(sortBy)}</span>
                 <List size={14} />
@@ -158,14 +157,14 @@ export function SongsPage() {
               <AnimatePresence>
                 {showSortDropdown && (
                   <motion.div
-                    initial={{ opacity: 0, y: -10 }}
+                    initial={{ opacity: 0, y: -8 }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.15 }}
-                    className="absolute right-0 mt-1.5 w-44 bg-zinc-900 border border-white/5 rounded-xl shadow-2xl p-1.5 z-50 text-xs text-text/80"
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ duration: 0.12 }}
+                    className="absolute right-0 mt-1.5 w-44 bg-[#151518] border border-white/10 rounded-xl shadow-2xl p-1.5 z-50 text-xs font-mono text-[#8B90A0]"
                   >
-                    <div className="px-3 py-1.5 text-[9px] uppercase font-bold text-text/30 tracking-wider">
-                      Sort by
+                    <div className="px-3 py-1.5 text-[9px] uppercase font-bold text-[#8B90A0]/50 tracking-wider">
+                      SORT BY
                     </div>
                     {[
                       { value: 'custom', label: 'Custom order' },
@@ -181,10 +180,10 @@ export function SongsPage() {
                           handleSortChange(opt.value as any);
                           setShowSortDropdown(false);
                         }}
-                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left transition-colors ${
+                        className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left transition-colors cursor-pointer ${
                           sortBy === opt.value
-                            ? 'text-primary font-semibold bg-white/5'
-                            : 'text-text/60 hover:text-text hover:bg-white/[0.02]'
+                            ? 'text-[#0070F3] font-bold bg-white/5'
+                            : 'text-[#8B90A0] hover:text-white hover:bg-white/5'
                         }`}
                       >
                         <span>
@@ -195,7 +194,7 @@ export function SongsPage() {
                             </span>
                           )}
                         </span>
-                        {sortBy === opt.value && <Check size={14} className="text-primary" />}
+                        {sortBy === opt.value && <Check size={14} className="text-[#0070F3]" />}
                       </button>
                     ))}
                   </motion.div>
@@ -206,13 +205,12 @@ export function SongsPage() {
 
           {songs.length > 0 && (
             <motion.button
-              whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               onClick={() => setQueue(sortedSongs, 0, 'Songs')}
-              className="flex items-center gap-2 px-5 py-2.5 bg-primary rounded-button text-sm font-semibold text-zinc-950 shadow-glow hover:bg-primary-hover transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-[#0070F3] hover:bg-[#1B82FF] text-white text-xs font-mono font-bold uppercase rounded-md shadow-glow transition-all cursor-pointer"
             >
-              <Play size={16} fill="currentColor" />
-              Play All
+              <Play size={14} fill="currentColor" />
+              PLAY ALL
             </motion.button>
           )}
         </div>
@@ -221,16 +219,16 @@ export function SongsPage() {
       {/* Column headers */}
       {songs.length > 0 && (
         <div
-          className="grid gap-4 px-4 py-2 text-[10px] uppercase tracking-widest text-text/30 font-semibold border-b border-white/5 mb-1 select-none"
+          className="grid gap-4 px-4 py-2.5 text-[10px] uppercase font-mono tracking-wider text-[#8B90A0] font-bold border-b border-white/5 mb-1 select-none"
           style={{ gridTemplateColumns }}
         >
           <span>#</span>
           <div className="relative flex items-center">
             <span
               onClick={() => handleSortChange('title')}
-              className="cursor-pointer hover:text-text/70 transition-colors flex items-center gap-1 select-none"
+              className="cursor-pointer hover:text-white transition-colors flex items-center gap-1 select-none"
             >
-              Title {sortBy === 'title' && (sortOrder === 'asc' ? '↑' : '↓')}
+              TITLE {sortBy === 'title' && (sortOrder === 'asc' ? '↑' : '↓')}
             </span>
             <button
               aria-label="Resize title column"
@@ -240,27 +238,27 @@ export function SongsPage() {
               }}
               className="absolute -right-2 top-1/2 -translate-y-1/2 h-6 w-2 cursor-col-resize"
             >
-              <span className="block mx-auto h-4 w-px bg-white/15 hover:bg-primary/70 transition-colors" />
+              <span className="block mx-auto h-4 w-px bg-white/15 hover:bg-[#0070F3] transition-colors" />
             </button>
           </div>
           <span
             onClick={() => handleSortChange('album')}
-            className="cursor-pointer hover:text-text/70 transition-colors flex items-center gap-1 select-none w-fit"
+            className="cursor-pointer hover:text-white transition-colors flex items-center gap-1 select-none w-fit"
           >
-            Album {sortBy === 'album' && (sortOrder === 'asc' ? '↑' : '↓')}
+            ALBUM {sortBy === 'album' && (sortOrder === 'asc' ? '↑' : '↓')}
           </span>
           <span className="text-center flex items-center justify-center">
-            <Heart size={10} />
+            <Heart size={11} />
           </span>
           <span className="text-right flex items-center justify-end gap-1">
-            <Clock size={10} />
-            Duration
+            <Clock size={11} />
+            TIME
           </span>
         </div>
       )}
 
       {/* Song list */}
-      <div className="space-y-0.5">
+      <div className="space-y-1">
         {sortedSongs.map((song, index) => (
           <SongRow
             key={song.id}
@@ -276,11 +274,11 @@ export function SongsPage() {
 
       {songs.length === 0 && (
         <div className="flex flex-col items-center justify-center h-[50vh] text-center">
-          <div className="w-24 h-24 glass rounded-2xl flex items-center justify-center mb-4">
-            <Music size={36} className="text-text/20" />
+          <div className="w-20 h-20 bg-[#151518] border border-white/10 rounded-2xl flex items-center justify-center mb-4 shadow-lg">
+            <Music size={32} className="text-[#8B90A0]/30" />
           </div>
-          <p className="text-text/40 text-sm">No songs in your library</p>
-          <p className="text-text/20 text-xs mt-1">Add a music folder to get started</p>
+          <p className="text-[#8B90A0] font-mono text-xs font-bold">No songs in your library</p>
+          <p className="text-[#8B90A0]/50 font-mono text-[11px] mt-1">Add a music folder from the sidebar</p>
         </div>
       )}
     </div>
@@ -305,7 +303,6 @@ function SongRow({ song, index, gridTemplateColumns, isActive, isPlaying, onPlay
   const [viewingDetailsSong, setViewingDetailsSong] = useState<Song | null>(null);
 
   const handleSongClick = () => {
-    console.log('Song clicked', song);
     onPlay();
   };
 
@@ -317,18 +314,18 @@ function SongRow({ song, index, gridTemplateColumns, isActive, isPlaying, onPlay
         event.preventDefault();
         setContextMenu({ x: event.clientX, y: event.clientY });
       }}
-      className={`group grid gap-4 px-4 py-2.5 rounded-xl cursor-pointer transition-all duration-200 ${
+      className={`group grid gap-4 px-4 py-2.5 rounded-xl cursor-pointer transition-all duration-150 ${
         isActive
-          ? 'bg-primary/10 border-l-2 border-primary'
-          : 'hover:bg-white/[0.03] border-l-2 border-transparent'
+          ? 'bg-[#0070F3]/15 border-l-2 border-[#0070F3]'
+          : 'bg-[#151518] hover:bg-[#1C1B1B] border-l-2 border-transparent'
       }`}
       style={{ gridTemplateColumns }}
     >
       {/* Track number / play button */}
-      <div className="flex items-center justify-center">
+      <div className="flex items-center justify-center font-mono">
         <span
-          className={`text-sm tabular-nums group-hover:hidden ${
-            isActive ? 'text-primary font-semibold' : 'text-text/30'
+          className={`text-xs tabular-nums group-hover:hidden ${
+            isActive ? 'text-[#0070F3] font-bold' : 'text-[#8B90A0]'
           }`}
         >
           {isActive && isPlaying ? (
@@ -336,7 +333,7 @@ function SongRow({ song, index, gridTemplateColumns, isActive, isPlaying, onPlay
               {[1, 2, 3].map((i) => (
                 <motion.div
                   key={i}
-                  className="w-0.5 bg-primary rounded-full"
+                  className="w-0.5 bg-[#0070F3] rounded-full"
                   animate={{ height: ['20%', '100%', '20%'] }}
                   transition={{ duration: 0.7, repeat: Infinity, delay: i * 0.12 }}
                 />
@@ -348,10 +345,10 @@ function SongRow({ song, index, gridTemplateColumns, isActive, isPlaying, onPlay
         </span>
         <button
           onClick={handleSongClick}
-          className="hidden group-hover:flex items-center justify-center text-text/80"
+          className="hidden group-hover:flex items-center justify-center text-white cursor-pointer"
         >
           {isActive && isPlaying ? (
-            <Pause size={14} fill="currentColor" className="text-primary" />
+            <Pause size={14} fill="currentColor" className="text-[#0070F3]" />
           ) : (
             <Play size={14} fill="currentColor" />
           )}
@@ -364,13 +361,13 @@ function SongRow({ song, index, gridTemplateColumns, isActive, isPlaying, onPlay
           <img
             src={coverSrc}
             alt=""
-            className="w-9 h-9 rounded-lg object-cover shrink-0"
+            className="w-9 h-9 rounded-lg object-cover shrink-0 border border-white/5"
             onError={(e) => {
               (e.target as HTMLImageElement).src = '/default-cover.png';
             }}
           />
         ) : (
-          <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center shrink-0 text-text/30">
+          <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center shrink-0 text-[#8B90A0]">
             <Music size={14} />
           </div>
         )}
@@ -378,19 +375,19 @@ function SongRow({ song, index, gridTemplateColumns, isActive, isPlaying, onPlay
           <div className="flex items-center gap-2 min-w-0">
             <OverflowMarqueeText
               text={song.title}
-              className={`text-sm font-medium flex-1 ${isActive ? 'text-primary' : 'text-text'}`}
+              className={`text-xs font-bold flex-1 ${isActive ? 'text-[#0070F3]' : 'text-white'}`}
             />
-            <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-white/5 text-text/40 uppercase font-mono shrink-0">
-              {song.codec}
+            <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-[#8B90A0] uppercase font-bold shrink-0">
+              {song.codec || 'MP3'}
             </span>
           </div>
-          <OverflowMarqueeText text={song.artist} className="text-xs text-text/40" />
+          <OverflowMarqueeText text={song.artist} className="text-[11px] font-mono text-[#8B90A0]" />
         </div>
       </div>
 
       {/* Album */}
       <div className="flex items-center">
-        <OverflowMarqueeText text={song.album} className="text-sm text-text/40 w-full" />
+        <OverflowMarqueeText text={song.album || 'Single'} className="text-xs font-mono text-[#8B90A0] w-full" />
       </div>
 
       {/* Favorite toggler */}
@@ -400,10 +397,10 @@ function SongRow({ song, index, gridTemplateColumns, isActive, isPlaying, onPlay
             e.stopPropagation();
             toggleFavoriteSong(song.id);
           }}
-          className={`hover:scale-110 transition-transform ${
+          className={`hover:scale-110 transition-transform cursor-pointer ${
             isFav
-              ? 'text-primary'
-              : 'text-text/20 hover:text-text/50 opacity-0 group-hover:opacity-100'
+              ? 'text-[#0070F3]'
+              : 'text-[#8B90A0]/40 hover:text-white opacity-0 group-hover:opacity-100'
           }`}
         >
           <Heart size={14} fill={isFav ? 'currentColor' : 'none'} />
@@ -412,7 +409,7 @@ function SongRow({ song, index, gridTemplateColumns, isActive, isPlaying, onPlay
 
       {/* Duration */}
       <div className="flex items-center justify-end">
-        <span className="text-sm text-text/30 tabular-nums font-mono">
+        <span className="text-xs text-[#8B90A0] tabular-nums font-mono">
           {formatTime(song.duration)}
         </span>
       </div>

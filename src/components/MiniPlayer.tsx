@@ -1,4 +1,4 @@
-import { usePlayerStore } from '@/stores';
+import { usePlayerStore, useFavoritesStore } from '@/stores';
 import { formatTime, getImageUrl } from '@/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -17,6 +17,7 @@ import {
   PanelRight,
   Maximize2,
   Timer,
+  Heart,
 } from 'lucide-react';
 import { useRef, useState, useEffect } from 'react';
 import { SleepTimerModal } from './SleepTimerModal';
@@ -49,6 +50,8 @@ export function MiniPlayer() {
     playPrevious,
   } = usePlayerStore();
 
+  const { isFavoriteSong, toggleFavoriteSong } = useFavoritesStore();
+
   const [showSleepTimerModal, setShowSleepTimerModal] = useState(false);
 
   const progressRef = useRef<HTMLDivElement>(null);
@@ -67,8 +70,6 @@ export function MiniPlayer() {
   }, [isSeeking, setStoreIsSeeking]);
 
   const progress = duration > 0 ? (localTime / duration) * 100 : 0;
-
-
 
   const handleProgressMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!progressRef.current || !duration) return;
@@ -152,69 +153,87 @@ export function MiniPlayer() {
   const coverSrc = currentSong.coverPath
     ? getImageUrl(currentSong.coverPath)
     : (currentSong.remoteCoverUrl || '/default-cover.png');
+  const isFav = isFavoriteSong(currentSong.id);
 
   return (
     <motion.div
-      initial={{ y: 100, opacity: 0 }}
+      initial={{ y: 80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      exit={{ y: 100, opacity: 0 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      className="h-[90px] glass-heavy border-t border-white/5 flex flex-col shrink-0 z-50"
+      exit={{ y: 80, opacity: 0 }}
+      transition={{ type: 'spring', stiffness: 320, damping: 32 }}
+      className="fixed bottom-3 left-4 right-4 max-w-[1400px] mx-auto h-[84px] bg-[#131313]/95 backdrop-blur-2xl border border-white/10 rounded-2xl flex flex-col shrink-0 z-50 shadow-2xl"
     >
-      {/* Progress bar */}
+      {/* Top Seekable Progress Bar */}
       <div
         ref={progressRef}
         onMouseDown={handleProgressMouseDown}
-        className="relative w-full h-1 cursor-pointer group"
+        className="relative w-full h-1 cursor-pointer group shrink-0 rounded-t-2xl overflow-hidden"
       >
         <div className="absolute inset-0 bg-white/5" />
         <motion.div
-          className="absolute left-0 top-0 h-full bg-gradient-to-r from-primary to-accent"
+          className="absolute left-0 top-0 h-full bg-[#0070F3]"
           style={{ width: `${progress}%` }}
           transition={isSeeking ? { duration: 0 } : { duration: 0.1 }}
         />
         <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-primary rounded-full shadow-glow opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-[#0070F3] rounded-full shadow-glow opacity-0 group-hover:opacity-100 transition-opacity"
           style={{ left: `calc(${progress}% - 6px)` }}
         />
       </div>
 
-      {/* Controls */}
-      <div className="flex-1 flex items-center px-4 gap-4">
-        {/* Song info */}
-        <div
-          className="flex items-center gap-3 w-[280px] min-w-0 cursor-pointer"
-          onClick={toggleNowPlaying}
-        >
+      {/* Control Bar Layout */}
+      <div className="flex-1 flex items-center px-4 gap-3 md:gap-4">
+        {/* Left: Song Metadata & Favorite Button */}
+        <div className="flex items-center gap-2.5 w-[210px] lg:w-[250px] min-w-0 group shrink-0">
           <motion.img
             key={currentSong.id}
-            initial={{ scale: 0.8, opacity: 0 }}
+            initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             src={coverSrc}
             alt={currentSong.album}
             referrerPolicy="no-referrer"
-            className="w-12 h-12 rounded-lg object-cover shadow-lg"
+            onClick={toggleNowPlaying}
+            className="w-11 h-11 rounded-lg object-cover shadow-md border border-white/5 cursor-pointer"
             onError={(e) => {
               (e.target as HTMLImageElement).src = '/default-cover.png';
             }}
           />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-text truncate">{currentSong.title}</p>
-            <p className="text-xs text-text/50 truncate">{currentSong.artist}</p>
+          <div className="min-w-0 flex-1 cursor-pointer" onClick={toggleNowPlaying}>
+            <p className="text-xs font-bold text-white group-hover:text-[#0070F3] transition-colors truncate">
+              {currentSong.title}
+            </p>
+            <p className="text-[11px] text-[#9CA3AF] truncate mt-0.5">
+              {currentSong.artist}
+            </p>
             {isStreaming && (
-              <span className="text-[9px] text-sky-400/70 font-medium">☁ Streaming</span>
+              <span className="font-mono text-[9px] text-[#0070F3] font-semibold">
+                ☁ Streaming
+              </span>
             )}
           </div>
+
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavoriteSong(currentSong.id);
+            }}
+            className={`p-1.5 rounded-full transition-colors cursor-pointer shrink-0 ${
+              isFav ? 'text-[#0070F3]' : 'text-[#8B90A0] hover:text-white'
+            }`}
+            title={isFav ? 'Remove from Favorites' : 'Add to Favorites'}
+          >
+            <Heart size={16} fill={isFav ? 'currentColor' : 'none'} />
+          </button>
         </div>
 
-        {/* Center controls */}
-        <div className="flex-1 flex items-center justify-center gap-3">
+        {/* Center: Playback Controls */}
+        <div className="flex-1 flex items-center justify-center gap-2 md:gap-3">
           <ControlButton onClick={toggleShuffle} active={shuffleMode === 'on'} size="sm">
-            <Shuffle size={16} strokeWidth={1.8} />
+            <Shuffle size={15} strokeWidth={1.8} />
           </ControlButton>
 
           <ControlButton onClick={playPrevious}>
-            <SkipBack size={18} strokeWidth={1.8} />
+            <SkipBack size={17} strokeWidth={1.8} />
           </ControlButton>
 
           <motion.button
@@ -223,45 +242,45 @@ export function MiniPlayer() {
               setIsPlaying(!isPlaying);
               window.dispatchEvent(new CustomEvent('player:toggle'));
             }}
-            className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white shadow-glow hover:bg-primary-hover transition-colors"
+            className="w-9 h-9 rounded-full bg-[#0070F3] flex items-center justify-center text-white shadow-glow hover:bg-[#1B82FF] transition-colors cursor-pointer"
           >
             <AnimatePresence mode="wait">
               <motion.div
                 key={isPlaying ? 'pause' : 'play'}
-                initial={{ scale: 0.5, opacity: 0 }}
+                initial={{ scale: 0.6, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.5, opacity: 0 }}
-                transition={{ duration: 0.15 }}
+                exit={{ scale: 0.6, opacity: 0 }}
+                transition={{ duration: 0.12 }}
               >
                 {isPlaying ? (
-                  <Pause size={18} strokeWidth={1.8} fill="#000" className="text-black" />
+                  <Pause size={17} strokeWidth={2} fill="#FFF" className="text-white" />
                 ) : (
-                  <Play size={18} strokeWidth={1.8} fill="#000" className="text-black ml-0.5" />
+                  <Play size={17} strokeWidth={2} fill="#FFF" className="text-white ml-0.5" />
                 )}
               </motion.div>
             </AnimatePresence>
           </motion.button>
 
           <ControlButton onClick={playNext}>
-            <SkipForward size={18} strokeWidth={1.8} />
+            <SkipForward size={17} strokeWidth={1.8} />
           </ControlButton>
 
           <ControlButton onClick={toggleRepeat} active={repeatMode !== 'off'} size="sm">
             {repeatMode === 'one' ? (
-              <Repeat1 size={16} strokeWidth={1.8} />
+              <Repeat1 size={15} strokeWidth={1.8} />
             ) : (
-              <Repeat size={16} strokeWidth={1.8} />
+              <Repeat size={15} strokeWidth={1.8} />
             )}
           </ControlButton>
         </div>
 
-        {/* Right controls */}
-        <div className="flex items-center gap-3 w-[280px] justify-end">
-          <span className="text-[10px] text-text/40 font-mono tabular-nums">
+        {/* Right: Timestamps & Feature Toggles */}
+        <div className="flex items-center gap-2 md:gap-2.5 min-w-0 justify-end shrink-0">
+          <span className="font-mono text-[10px] text-[#8B90A0] tabular-nums hidden sm:inline">
             {formatTime(currentTime)}
           </span>
-          <span className="text-[10px] text-text/20">/</span>
-          <span className="text-[10px] text-text/40 font-mono tabular-nums">
+          <span className="font-mono text-[10px] text-[#8B90A0]/40 hidden sm:inline">/</span>
+          <span className="font-mono text-[10px] text-[#8B90A0] tabular-nums hidden sm:inline">
             {formatTime(duration)}
           </span>
 
@@ -294,29 +313,29 @@ export function MiniPlayer() {
             />
           </div>
 
-          {/* Volume */}
-          <div className="flex items-center gap-2">
-            <button onClick={toggleMute} className="text-text/50 hover:text-text transition-colors">
-              <VolumeIcon size={16} strokeWidth={1.8} />
+          {/* Volume Control */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={toggleMute} className="text-[#8B90A0] hover:text-white transition-colors cursor-pointer">
+              <VolumeIcon size={15} strokeWidth={1.8} />
             </button>
             <div
               ref={volumeRef}
               onMouseDown={handleVolumeMouseDown}
-              className="relative w-20 h-1 bg-white/10 rounded-full cursor-pointer group"
+              className="relative w-20 shrink-0 h-1.5 bg-white/10 rounded-full cursor-pointer group"
             >
               <div
-                className="absolute left-0 top-0 h-full bg-primary rounded-full"
+                className="absolute left-0 top-0 h-full bg-[#0070F3] rounded-full"
                 style={{ width: `${(isMuted ? 0 : volume) * 100}%` }}
               />
               <div
-                className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-primary rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-glow"
-                style={{ left: `calc(${(isMuted ? 0 : volume) * 100}% - 5px)` }}
+                className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-[#0070F3] rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-glow"
+                style={{ left: `calc(${(isMuted ? 0 : volume) * 100}% - 6px)` }}
               />
             </div>
           </div>
 
           <ControlButton onClick={toggleNowPlaying} size="sm" title="Fullscreen">
-            <Maximize2 size={15} strokeWidth={1.8} />
+            <Maximize2 size={14} strokeWidth={1.8} />
           </ControlButton>
         </div>
       </div>
@@ -338,10 +357,10 @@ function ControlButton({ children, onClick, active = false, size = 'md', title }
       whileTap={{ scale: 0.9 }}
       onClick={onClick}
       title={title}
-      className={`flex items-center justify-center rounded-full transition-colors duration-200 ${
-        size === 'sm' ? 'w-8 h-8' : 'w-9 h-9'
+      className={`flex items-center justify-center rounded-full transition-colors duration-150 cursor-pointer ${
+        size === 'sm' ? 'w-7 h-7' : 'w-8 h-8'
       } ${
-        active ? 'text-primary hover:text-primary-light' : 'text-text/50 hover:text-text/80'
+        active ? 'text-[#0070F3] bg-[#0070F3]/10 border border-[#0070F3]/30' : 'text-[#8B90A0] hover:text-white'
       } hover:bg-white/5`}
     >
       {children}

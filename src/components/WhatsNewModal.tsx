@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, Check, PartyPopper, X, Music2, ShieldCheck, Radio, ListMusic, Timer } from 'lucide-react';
+import { Sparkles, Check, PartyPopper, X, Layout, Heart, Mic2, Music } from 'lucide-react';
 
 // Current app release version
-const CURRENT_VERSION = '2.0.4';
+const CURRENT_VERSION = '2.0.5';
 
 export function WhatsNewModal() {
   const [isOpen, setIsOpen] = useState(false);
@@ -44,8 +44,8 @@ export function WhatsNewModal() {
           className="relative w-full max-w-lg glass-heavy border border-white/10 rounded-2xl p-6 shadow-2xl backdrop-blur-2xl text-text overflow-hidden"
         >
           {/* Top Decorative Glow */}
-          <div className="absolute -top-16 -right-16 w-40 h-40 bg-sky-500/20 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute -bottom-16 -left-16 w-40 h-40 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -top-16 -right-16 w-40 h-40 bg-[#0070F3]/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-16 -left-16 w-40 h-40 bg-sky-500/20 rounded-full blur-3xl pointer-events-none" />
 
           {/* Close button */}
           <button
@@ -57,13 +57,13 @@ export function WhatsNewModal() {
 
           {/* Header Icon */}
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-400 shrink-0">
+            <div className="w-12 h-12 rounded-2xl bg-[#0070F3]/20 border border-[#0070F3]/30 flex items-center justify-center text-[#0070F3] shrink-0">
               <PartyPopper size={24} />
             </div>
             <div>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-sky-500/15 border border-sky-500/30 text-sky-400 tracking-wide">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-[#0070F3]/15 border border-[#0070F3]/30 text-[#0070F3] tracking-wide">
                 <Sparkles size={11} />
-                WHAT'S NEW
+                WHAT'S NEW UI
               </span>
               <h2 className="text-xl font-extrabold text-white tracking-tight mt-0.5">
                 LocalSpo v{CURRENT_VERSION}
@@ -72,67 +72,55 @@ export function WhatsNewModal() {
           </div>
 
           <p className="text-xs text-text/60 mb-5 leading-relaxed">
-            Selamat datang di versi 2.0.4! Berikut adalah fitur baru, perbaikan streaming, dan peningkatan performa pada rilis ini:
+            Selamat datang di versi 2.0.5! Rilis ini menghadirkan perombakan desain UI desktop baru yang modern, bersih, dan dinamis:
           </p>
 
           {/* Feature Highlights List */}
-          <div className="space-y-3 mb-6 max-h-[280px] overflow-y-auto pr-1 custom-scrollbar">
+          <div className="space-y-3 mb-6 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
             <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
-              <div className="p-2 rounded-lg bg-emerald-500/15 text-emerald-400 shrink-0 mt-0.5">
-                <Music2 size={16} />
+              <div className="p-2 rounded-lg bg-[#0070F3]/15 text-[#0070F3] shrink-0 mt-0.5">
+                <Layout size={16} />
               </div>
               <div>
-                <h4 className="text-xs font-bold text-white">Instant Ad-Free Online Streaming</h4>
+                <h4 className="text-xs font-bold text-white">Desain Desktop Kumo Dark & Navigation</h4>
                 <p className="text-[11px] text-text/50 mt-0.5 leading-snug">
-                  Putar lagu dari pencarian online secara instan tanpa download dan 100% bebas iklan!
+                  Tata letak 3 kolom modern dengan font Inter & JetBrains Mono, ambient glow, bar pencarian Ctrl+L, serta sidebar Docs & Settings yang rapi.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+              <div className="p-2 rounded-lg bg-emerald-500/15 text-emerald-400 shrink-0 mt-0.5">
+                <Music size={16} />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-white">Infinite Autoplay (Multi-Artist Mix)</h4>
+                <p className="text-[11px] text-text/50 mt-0.5 leading-snug">
+                  Musik terus mengalir tanpa terhenti! Ketika playlist habis, pemutar otomatis mencari & memuat lagu-lagu serupa dari berbagai artis berbeda.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
+              <div className="p-2 rounded-lg bg-pink-500/15 text-pink-400 shrink-0 mt-0.5">
+                <Mic2 size={16} />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-white">Prioritas Lirik Asli Hangul (Korea) & Real-time Sync</h4>
+                <p className="text-[11px] text-text/50 mt-0.5 leading-snug">
+                  Lirik K-Pop otomatis mengutamakan bahasa asli Korea (Hangul + Romaja), auto-scroll presisi, serta tombol Reload Lyrics (🔄).
                 </p>
               </div>
             </div>
 
             <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
               <div className="p-2 rounded-lg bg-sky-500/15 text-sky-400 shrink-0 mt-0.5">
-                <ListMusic size={16} />
+                <Heart size={16} />
               </div>
               <div>
-                <h4 className="text-xs font-bold text-white">Playlist Details & Recommendation Engine</h4>
+                <h4 className="text-xs font-bold text-white">Pencarian 50+ Lagu & Context Menu Klik Kanan</h4>
                 <p className="text-[11px] text-text/50 mt-0.5 leading-snug">
-                  Tampilan halaman playlist baru dengan saran lagu otomatis berbasis rekomendasi musik sesuai preferensi pemutaran Anda.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
-              <div className="p-2 rounded-lg bg-indigo-500/15 text-indigo-400 shrink-0 mt-0.5">
-                <Radio size={16} />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-white">OBS Now Playing Overlay Server</h4>
-                <p className="text-[11px] text-text/50 mt-0.5 leading-snug">
-                  Integrasi server WebSocket lokal untuk mengirim judul lagu, artis, cover art, dan progress secara real-time ke OBS Studio.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
-              <div className="p-2 rounded-lg bg-emerald-500/15 text-emerald-400 shrink-0 mt-0.5">
-                <Timer size={16} />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-white">Interactive Sleep Timer Widget</h4>
-                <p className="text-[11px] text-text/50 mt-0.5 leading-snug">
-                  Fitur Sleep Timer baru dengan pop-up mengambang. Atur pemutaran otomatis berhenti berdasarkan jumlah lagu (misal: 10 lagu), durasi menit, atau akhir playlist.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/5">
-              <div className="p-2 rounded-lg bg-amber-500/15 text-amber-400 shrink-0 mt-0.5">
-                <ShieldCheck size={16} />
-              </div>
-              <div>
-                <h4 className="text-xs font-bold text-white">Optimized Desktop Audio Engine</h4>
-                <p className="text-[11px] text-text/50 mt-0.5 leading-snug">
-                  Peningkatan stabilitas mesin pemutar audio lokal, pemuatan lirik otomatis, dan perbaikan antarmuka UI.
+                  Hasil pencarian diperluas hingga 50 item dan dukungan Klik Kanan pada Search Bar untuk opsi Add to Queue, Playlist, Favorite, & Download.
                 </p>
               </div>
             </div>
@@ -141,10 +129,10 @@ export function WhatsNewModal() {
           {/* Action Button */}
           <button
             onClick={handleClose}
-            className="w-full py-3 px-4 bg-sky-500 hover:bg-sky-400 text-zinc-950 font-extrabold text-xs rounded-xl transition-all shadow-glow flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full py-3 px-4 bg-[#0070F3] hover:bg-[#1B82FF] text-white font-extrabold text-xs rounded-xl transition-all shadow-glow flex items-center justify-center gap-2 cursor-pointer"
           >
             <Check size={16} />
-            <span>Mulai Mendengarkan</span>
+            <span>Cobalah UI Baru</span>
           </button>
         </motion.div>
       </div>
