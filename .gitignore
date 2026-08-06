@@ -7,6 +7,7 @@ release-dist/
 release*/
 # Ignore semua Markdown
 *.md
+.env
 
 # Kecuali README.md
 !README.md

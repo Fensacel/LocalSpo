@@ -8,6 +8,8 @@ import { createStreamSong } from '@/types/music';
 import type { Song } from '@/types';
 import { SongContextMenu } from '@/components/SongContextMenu';
 
+import logoImg from '@/assets/logo.png';
+
 interface RecentSearchItem {
   id: string;
   title: string;
@@ -312,7 +314,7 @@ export function SearchBar() {
                         className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors group"
                       >
                         <img
-                          src={track.album?.images?.[0]?.url || track.coverUrl || 'logo.png'}
+                          src={track.album?.images?.[0]?.url || track.coverUrl || logoImg}
                           className="w-8 h-8 object-cover rounded-md"
                           alt=""
                         />

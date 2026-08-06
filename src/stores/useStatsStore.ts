@@ -16,6 +16,7 @@ export interface StatsState {
   plays: TrackPlay[];
   totalListeningSeconds: number;
   recordPlay: (play: TrackPlay) => void;
+  recordListeningTime: (seconds: number) => void;
   loadStats: () => Promise<void>;
   saveStats: () => Promise<void>;
 
@@ -54,11 +55,18 @@ export const useStatsStore = create<StatsState>((set, get) => ({
   totalListeningSeconds: 0,
 
   recordPlay: (play) => {
-    // Only record plays with duration >= 5s (or 30s)
-    if (play.duration < 5) return;
+    if (play.duration < 1) return;
     set((s) => ({
       plays: [...s.plays, play],
-      totalListeningSeconds: s.totalListeningSeconds + play.duration,
+      totalListeningSeconds: s.totalListeningSeconds + Math.floor(play.duration),
+    }));
+    get().saveStats();
+  },
+
+  recordListeningTime: (seconds) => {
+    if (seconds < 1) return;
+    set((s) => ({
+      totalListeningSeconds: s.totalListeningSeconds + Math.floor(seconds),
     }));
     get().saveStats();
   },

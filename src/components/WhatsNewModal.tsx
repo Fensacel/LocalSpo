@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Check, PartyPopper, X, Search, Disc3, FileText, Move } from 'lucide-react';
 
 // Current app release version
-const CURRENT_VERSION = '2.0.6';
+const CURRENT_VERSION = '2.0.7';
 
 export function WhatsNewModal() {
   const [isOpen, setIsOpen] = useState(false);
@@ -72,7 +72,7 @@ export function WhatsNewModal() {
           </div>
 
           <p className="text-xs text-text/60 mb-5 leading-relaxed">
-            Selamat datang di versi 2.0.6! Rilis ini menghadirkan perbaikan mesin pencarian, navigasi album online, pembaruan cover art otomatis, serta UI yang lebih bersih:
+            Selamat datang di versi 2.0.7! Rilis ini menghadirkan perbaikan mesin pencarian, navigasi album online, pembaruan cover art otomatis, serta UI yang lebih bersih:
           </p>
 
           {/* Feature Highlights List */}
@@ -132,7 +132,7 @@ export function WhatsNewModal() {
             className="w-full py-3 px-4 bg-[#0070F3] hover:bg-[#1B82FF] text-white font-extrabold text-xs rounded-xl transition-all shadow-glow flex items-center justify-center gap-2 cursor-pointer"
           >
             <Check size={16} />
-            <span>Nikmati LocalSpo v2.0.6</span>
+            <span>Nikmati LocalSpo v2.0.7</span>
           </button>
         </motion.div>
       </div>

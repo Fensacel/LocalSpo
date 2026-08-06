@@ -10,3 +10,4 @@ export { useNetworkStore } from './useNetworkStore';
 export { useObsStore } from './useObsStore';
 export { useProfileStore } from './useProfileStore';
 export { useStatsStore } from './useStatsStore';
+export { useFollowedPlaylistStore } from './useFollowedPlaylistStore';

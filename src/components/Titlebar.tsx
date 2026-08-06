@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Minus, Square, X, Copy, ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { Minus, Square, X, Copy, ChevronLeft, ChevronRight, Download, MessageSquare } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { platformService } from '@/platform';
 import { ProfileDropdown } from '@/components/ProfileDropdown';
 import { UniversalSearchBar } from '@/components/UniversalSearchBar';
 import { ImportPlaylistModal } from '@/components/ImportPlaylistModal';
+import { SocialChatDrawer } from '@/components/SocialChatDrawer';
+import { useChatStore } from '@/stores/useChatStore';
 
 export function Titlebar() {
   const [isMaximized, setIsMaximized] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showChatDrawer, setShowChatDrawer] = useState(false);
+  const { hasUnread, clearUnread } = useChatStore();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -88,6 +92,21 @@ export function Titlebar() {
             <span className="hidden xl:inline">Import Playlist</span>
           </button>
 
+          <button
+            type="button"
+            onClick={() => {
+              clearUnread();
+              setShowChatDrawer(true);
+            }}
+            title="Social Chat"
+            className="w-8 h-8 rounded-full bg-white/5 hover:bg-[#0070F3] text-[#9CA3AF] hover:text-white flex items-center justify-center border border-white/10 transition-all cursor-pointer relative"
+          >
+            <MessageSquare size={14} />
+            {hasUnread && (
+              <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse shadow-lg shadow-red-500/80 border border-[#0B0B0D]" />
+            )}
+          </button>
+
           <ProfileDropdown />
 
           <div className="w-px h-5 bg-white/10 mx-1" />
@@ -122,6 +141,9 @@ export function Titlebar() {
 
       {/* Import Playlist Modal */}
       <ImportPlaylistModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} />
+
+      {/* Social Chat Drawer */}
+      <SocialChatDrawer isOpen={showChatDrawer} onClose={() => setShowChatDrawer(false)} />
     </>
   );
 }

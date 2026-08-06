@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Radio, Loader2, Sparkles, Plus } from 'lucide-react';
-import { usePlaylistStore, useLibraryStore, useToastStore } from '@/stores';
+import { usePlaylistStore, useLibraryStore, useToastStore, useFollowedPlaylistStore } from '@/stores';
 import { createStreamSong } from '@/types/music';
 import { useNavigate } from 'react-router-dom';
 
@@ -140,6 +140,20 @@ export function ImportPlaylistModal({ isOpen, onClose }: ImportPlaylistModalProp
 
       if (newPlaylist && newPlaylist.id) {
         await addSongsToPlaylist(newPlaylist.id, streamSongs);
+        try {
+          await useFollowedPlaylistStore.getState().followPlaylist({
+            id: newPlaylist.id,
+            provider: 'spotify',
+            playlistUrl: cleanUrl,
+            name: newPlaylist.name,
+            description: newPlaylist.description,
+            coverUrl: meta.coverUrl,
+            tracks: streamSongs,
+          });
+        } catch (fErr) {
+          console.warn('Auto-follow error on import:', fErr);
+        }
+
         showToast(`Imported "${newPlaylist.name}" (${streamSongs.length} songs)!`, 'success');
         setUrl('');
         onClose();

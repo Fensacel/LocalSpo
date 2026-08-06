@@ -12,10 +12,14 @@ import {
   RefreshCw,
   Download,
   Check,
+  Radio,
 } from 'lucide-react';
 
 import { useNavigate } from 'react-router-dom';
 import { OBSOverlaySection } from '@/components/OBSOverlaySection';
+import { useFollowedPlaylistStore } from '@/stores/useFollowedPlaylistStore';
+
+import logoImg from '@/assets/logo.png';
 
 export function SettingsPage() {
   const navigate = useNavigate();
@@ -271,10 +275,13 @@ export function SettingsPage() {
           </div>
         </SettingsSection>
 
+        {/* Streaming Playlist Live Sync Section */}
+        <StreamingPlaylistSettingsSection />
+
         {/* About */}
         <div className="glass rounded-2xl p-6 text-center space-y-3">
           <div className="flex items-center justify-center gap-2">
-            <img src="logo.png" className="w-5 h-5 object-contain" alt="" />
+            <img src={logoImg} className="w-5 h-5 object-contain" alt="" />
             <span className="text-sm font-bold tracking-wider">LocalSpo</span>
           </div>
           <p className="text-xs text-text/30">Version {appVersion}</p>
@@ -336,5 +343,52 @@ function ToggleSetting({ label, description, enabled, onChange }: ToggleSettingP
         />
       </button>
     </div>
+  );
+}
+
+function StreamingPlaylistSettingsSection() {
+  const { settings, updateSettings } = useFollowedPlaylistStore();
+
+  return (
+    <SettingsSection title="Streaming Playlists & Auto Sync" icon={Radio}>
+      <ToggleSetting
+        label="Background Live Sync"
+        description="Automatically check followed playlists for updates in background"
+        enabled={settings.backgroundSync}
+        onChange={(val) => updateSettings({ backgroundSync: val })}
+      />
+
+      <div className="flex items-center justify-between py-3">
+        <div>
+          <p className="text-sm font-medium">Sync Interval</p>
+          <p className="text-xs text-text/30">Frequency to check for new or removed songs</p>
+        </div>
+        <select
+          value={settings.syncInterval}
+          onChange={(e) => updateSettings({ syncInterval: e.target.value as any })}
+          className="bg-white/10 border border-white/10 text-xs font-semibold text-white rounded-xl px-3 py-1.5 focus:outline-none"
+        >
+          <option value="5m">Every 5 minutes</option>
+          <option value="10m">Every 10 minutes</option>
+          <option value="30m">Every 30 minutes</option>
+          <option value="1h">Every 1 hour</option>
+          <option value="manual">Manual Only</option>
+        </select>
+      </div>
+
+      <ToggleSetting
+        label="Sync Notifications"
+        description="Show toast notifications when followed playlists get updated"
+        enabled={settings.notificationsEnabled}
+        onChange={(val) => updateSettings({ notificationsEnabled: val })}
+      />
+
+      <ToggleSetting
+        label="Keep Removed Songs in Archive"
+        description="Move songs removed by creator into an Archived Tracks list"
+        enabled={settings.keepRemovedSongs}
+        onChange={(val) => updateSettings({ keepRemovedSongs: val })}
+      />
+    </SettingsSection>
   );
 }

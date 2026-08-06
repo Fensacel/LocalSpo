@@ -1,7 +1,18 @@
-import { app, BrowserWindow, ipcMain, dialog, protocol, net } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, protocol, net, shell } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import fs from 'fs';
+
+if (process.defaultApp) {
+  if (process.argv.length >= 2) {
+    app.setAsDefaultProtocolClient('localspo', process.execPath, [path.resolve(process.argv[1])]);
+  }
+} else {
+  app.setAsDefaultProtocolClient('localspo');
+}
+
+// Suppress internal Chromium GPU cache warning in dev mode
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 import crypto from 'crypto';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { registerScannerIpc } from './scanner';
@@ -648,6 +659,16 @@ function registerIpcHandlers(): void {
     return { size: stat.size, mtime: stat.mtimeMs };
   });
 
+  ipcMain.handle('shell:openExternal', async (_event, urlStr: string) => {
+    try {
+      await shell.openExternal(urlStr);
+      return true;
+    } catch (err) {
+      console.error('[Main] shell.openExternal failed:', err);
+      return false;
+    }
+  });
+
   ipcMain.handle('fs:writeFile', async (_event, filePath: string, data: Buffer | string) => {
     const dir = path.dirname(filePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -676,7 +697,31 @@ function registerIpcHandlers(): void {
 import { registerOBSIpc } from './ipc/obsIpc';
 import { registerTaskbarIpc } from './ipc/taskbarIpc';
 
-// ─── App Lifecycle ──────────────────────────────────────
+// ─── Single Instance & Deep Link Setup ──────────────────
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_event, commandLine) => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+
+      const deepLink = commandLine.find((arg) => arg.startsWith('localspo://'));
+      if (deepLink) {
+        mainWindow.webContents.send('auth:deep-link', deepLink);
+      }
+    }
+  });
+}
+
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  if (mainWindow) {
+    mainWindow.webContents.send('auth:deep-link', url);
+  }
+});
 
 app.whenReady().then(() => {
   registerLocalProtocol();

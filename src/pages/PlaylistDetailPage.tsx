@@ -1,121 +1,101 @@
+import { useMemo, useCallback, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { usePlaylistStore, useLibraryStore, usePlayerStore, useFavoritesStore } from '@/stores';
+import { usePlaylistStore, useLibraryStore, usePlayerStore, useFavoritesStore, useToastStore } from '@/stores';
+import { useFollowedPlaylistStore } from '@/stores/useFollowedPlaylistStore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Play, Pause, Trash2, Music, ListMusic, Heart, List, Check, Camera, X, ChevronLeft, RefreshCw, Shuffle } from 'lucide-react';
+import {
+  Play, Pause, X, ChevronLeft, RefreshCw, Clock, Archive,
+  ListMusic, Camera, Trash2, Heart, Check, Shuffle, Music,
+} from 'lucide-react';
 import { formatTime, getImageUrl } from '@/utils';
 import { createStreamSong } from '@/types/music';
 import type { Song } from '@/types';
-import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
+import { SafeImage } from '@/components/SafeImage';
 import { SongContextMenu } from '@/components/SongContextMenu';
 import { EditSongModal } from '@/components/EditSongModal';
 import { SongDetailsModal } from '@/components/SongDetailsModal';
-import { SafeImage } from '@/components/SafeImage';
+import { platformService } from '@/platform';
 
 export function PlaylistDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [editingSong, setEditingSong] = useState<Song | null>(null);
-  const [viewingDetailsSong, setViewingDetailsSong] = useState<Song | null>(null);
-  const { playlists, removeSongFromPlaylist, deletePlaylist, updatePlaylist, addSongToPlaylist } = usePlaylistStore();
+
+  const {
+    playlists,
+    removeSongFromPlaylist,
+    deletePlaylist,
+    updatePlaylist,
+    addSongToPlaylist,
+  } = usePlaylistStore();
   const { getSongById } = useLibraryStore();
   const { currentSong, isPlaying, setQueue, setIsPlaying, shuffleMode, toggleShuffle } = usePlayerStore();
   const { isFavoriteSong, toggleFavoriteSong } = useFavoritesStore();
+  const followedStore = useFollowedPlaylistStore();
 
-  const [sortBy, setSortBy] = useState<'custom' | 'title' | 'artist' | 'album' | 'added' | 'duration'>('custom');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [showSortDropdown, setShowSortDropdown] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [editingName, setEditingName] = useState(false);
-  const [editingDesc, setEditingDesc] = useState(false);
-  const [nameValue, setNameValue] = useState('');
-  const [descValue, setDescValue] = useState('');
+  const [editingSong, setEditingSong] = useState<Song | null>(null);
+  const [viewingDetailsSong, setViewingDetailsSong] = useState<Song | null>(null);
   const [contextMenu, setContextMenu] = useState<{ song: Song; x: number; y: number } | null>(null);
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
-  const nameInputRef = useRef<HTMLInputElement | null>(null);
-  const descInputRef = useRef<HTMLTextAreaElement | null>(null);
-
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setShowSortDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, []);
-
-  const handleSortChange = (newSortBy: 'custom' | 'title' | 'artist' | 'album' | 'added' | 'duration') => {
-    if (sortBy === newSortBy) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortBy(newSortBy);
-      setSortOrder('asc');
-    }
-  };
-
-  const getSortLabel = (val: string) => {
-    switch (val) {
-      case 'title': return 'Title';
-      case 'artist': return 'Artist';
-      case 'album': return 'Album';
-      case 'added': return 'Recently added';
-      case 'duration': return 'Duration';
-      default: return 'Custom order';
-    }
-  };
-
-  const playlist = useMemo(() => playlists.find((p) => p.id === id), [playlists, id]);
-
-  const songs = useMemo(() => {
-    if (!playlist) return [];
-    return playlist.songIds
-      .map((sid) => getSongById(sid))
-      .filter((song): song is Song => song !== undefined);
-  }, [playlist, getSongById]);
-
-  const sortedSongs = useMemo(() => {
-    const list = [...songs];
-    if (sortBy === 'custom') {
-      if (sortOrder === 'desc') {
-        list.reverse();
-      }
-      return list;
-    }
-    list.sort((a, b) => {
-      if (sortBy === 'title') {
-        return a.title.localeCompare(b.title);
-      } else if (sortBy === 'artist') {
-        return a.artist.localeCompare(b.artist);
-      } else if (sortBy === 'album') {
-        return (a.album || '').localeCompare(b.album || '');
-      } else if (sortBy === 'added') {
-        return (a.addedAt || 0) - (b.addedAt || 0);
-      } else if (sortBy === 'duration') {
-        return a.duration - b.duration;
-      }
-      return 0;
-    });
-
-    if (sortOrder === 'desc') {
-      list.reverse();
-    }
-    return list;
-  }, [songs, sortBy, sortOrder]);
-
-  const totalDuration = useMemo(() => songs.reduce((acc, s) => acc + s.duration, 0), [songs]);
-
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [recommendedSongsList, setRecommendedSongsList] = useState<Song[]>([]);
-  const [isLoadingRecs, setIsLoadingRecs] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const localPlaylist = useMemo(() => playlists.find((p) => p.id === id), [playlists, id]);
+  const followedPlaylist = id ? followedStore.getFollowedPlaylist(id) : undefined;
+
+  const playlist = useMemo(() => {
+    if (localPlaylist) return localPlaylist;
+    if (followedPlaylist) {
+      return {
+        id: followedPlaylist.id,
+        name: followedPlaylist.name,
+        description: followedPlaylist.description,
+        coverPath: followedPlaylist.coverPath,
+        songIds: followedPlaylist.tracks.map((t) => t.id),
+        createdAt: followedPlaylist.lastSyncTime,
+        updatedAt: followedPlaylist.lastSyncTime,
+      };
+    }
+    return null;
+  }, [localPlaylist, followedPlaylist]);
+
+  const songs: Song[] = useMemo(() => {
+    if (localPlaylist) {
+      return localPlaylist.songIds
+        .map((sId) => getSongById(sId))
+        .filter((s): s is Song => s !== undefined);
+    }
+    if (followedPlaylist) return followedPlaylist.tracks;
+    return [];
+  }, [localPlaylist, followedPlaylist, getSongById]);
+
+  const totalDuration = useMemo(() => songs.reduce((acc, s) => acc + (s.duration || 0), 0), [songs]);
+
+  // Auto-follow imported streaming playlists
+  useEffect(() => {
+    if (followedPlaylist && !followedPlaylist.isFollowed && id) {
+      followedStore.followPlaylist({
+        id,
+        provider: followedPlaylist.provider,
+        playlistUrl: followedPlaylist.playlistUrl,
+        name: followedPlaylist.name,
+        description: followedPlaylist.description,
+        coverUrl: followedPlaylist.coverPath,
+        tracks: followedPlaylist.tracks,
+      });
+    }
+  }, [followedPlaylist, id]);
 
   const fetchRecommendations = useCallback(async () => {
-    setIsLoadingRecs(true);
+    if (!playlist) return;
     try {
-      const existingIds = new Set(playlist?.songIds ?? []);
+      const existingIds = new Set(playlist.songIds);
       const recSongs: Song[] = [];
-
-      // 1. Seed query from playlist artists or fallback to trending
       const playlistArtists = Array.from(new Set(songs.map((s) => s.artist).filter(Boolean)));
-      const query = playlistArtists.length > 0 ? playlistArtists[Math.floor(Math.random() * playlistArtists.length)] : 'Trending Hits';
+      const query = playlistArtists.length > 0
+        ? playlistArtists[Math.floor(Math.random() * playlistArtists.length)]
+        : 'Trending Hits';
 
       const res = await window.electronAPI?.spotify?.search?.(query, ['track']);
       if (res && Array.isArray(res.tracks)) {
@@ -124,7 +104,6 @@ export function PlaylistDetailPage() {
           if (!trackId) continue;
           const streamId = `stream_${trackId}`;
           if (existingIds.has(streamId)) continue;
-
           const s = createStreamSong({
             id: streamId,
             title: t.title,
@@ -137,25 +116,11 @@ export function PlaylistDetailPage() {
           recSongs.push(s);
         }
       }
-
-      // 2. Fallback to local library + streamSongsMap
-      const allLocal = useLibraryStore.getState().songs;
-      const streamMap = useLibraryStore.getState().streamSongsMap;
-      const allAvailable = [...allLocal, ...Object.values(streamMap)].filter((s) => !existingIds.has(s.id));
-
-      for (const s of allAvailable) {
-        if (!recSongs.some((r) => r.id === s.id)) {
-          recSongs.push(s);
-        }
-      }
-
       setRecommendedSongsList(recSongs.slice(0, 5));
     } catch (err) {
-      console.error('Failed to load recommendations:', err);
-    } finally {
-      setIsLoadingRecs(false);
+      console.error('[PlaylistDetailPage] Failed to load recommendations:', err);
     }
-  }, [playlist?.id, songs]);
+  }, [playlist, songs]);
 
   useEffect(() => {
     fetchRecommendations();
@@ -167,77 +132,64 @@ export function PlaylistDetailPage() {
   }, [isPlaying, currentSong, songs]);
 
   const handlePlayAll = useCallback(() => {
-    if (sortedSongs.length === 0 || !playlist) return;
+    if (songs.length === 0 || !playlist) return;
     if (isPlaylistPlaying) {
       setIsPlaying(!isPlaying);
       window.dispatchEvent(new CustomEvent('player:toggle'));
     } else {
-      const startIndex = shuffleMode === 'on' ? Math.floor(Math.random() * sortedSongs.length) : 0;
-      setQueue(sortedSongs, startIndex, playlist.name);
+      const startIndex = shuffleMode === 'on' ? Math.floor(Math.random() * songs.length) : 0;
+      setQueue(songs, startIndex, playlist.name);
     }
-  }, [sortedSongs, playlist, isPlaylistPlaying, isPlaying, setIsPlaying, shuffleMode, setQueue]);
+  }, [songs, playlist, isPlaylistPlaying, isPlaying, setIsPlaying, shuffleMode, setQueue]);
 
-  const handleShuffleToggle = useCallback(() => {
-    toggleShuffle();
-  }, [toggleShuffle]);
-
-  const handlePlaySong = useCallback(
-    (song: Song) => {
-      if (currentSong?.id === song.id) {
-        setIsPlaying(!isPlaying);
-        window.dispatchEvent(new CustomEvent('player:toggle'));
+  const handleSyncNow = async () => {
+    if (!id || !playlist) return;
+    setIsSyncing(true);
+    try {
+      if (followedPlaylist) {
+        await followedStore.syncPlaylist(id);
+        useToastStore.getState().showToast?.(`Synced "${playlist.name}"!`, 'success');
       } else {
-        const index = sortedSongs.findIndex((s) => s.id === song.id);
-        if (playlist) setQueue(sortedSongs, index >= 0 ? index : 0, playlist.name);
+        const found = followedStore.followedPlaylists.find((p) => p.id === id || p.name === playlist.name);
+        if (found) {
+          await followedStore.syncPlaylist(found.id);
+          useToastStore.getState().showToast?.(`Synced "${playlist.name}"!`, 'success');
+        } else {
+          await fetchRecommendations();
+          useToastStore.getState().showToast?.(`Refreshed recommendations for "${playlist.name}"!`, 'info');
+        }
       }
-    },
-    [currentSong, isPlaying, sortedSongs, playlist, setQueue, setIsPlaying],
-  );
-
-  const handleDelete = () => {
-    setShowDeleteConfirm(true);
+    } catch (err: any) {
+      console.error('[PlaylistDetailPage] Sync error:', err);
+      // If sync failed for a local non-remote playlist, fallback to refreshing recommendations
+      await fetchRecommendations();
+      useToastStore.getState().showToast?.('Refreshed playlist data', 'info');
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleChangeCover = async () => {
-    const filePath = await window.electronAPI.dialog.openImage();
-    if (filePath && playlist) {
-      await updatePlaylist(playlist.id, { coverPath: filePath });
-    }
+    if (!id || !localPlaylist) return;
+    const file = await platformService.dialog.openImage();
+    if (file) updatePlaylist(id, { coverPath: file });
   };
 
-  const startEditName = () => {
-    setNameValue(playlist?.name ?? '');
-    setEditingName(true);
-    setTimeout(() => nameInputRef.current?.focus(), 0);
-  };
-
-  const commitName = async () => {
-    if (!playlist) return;
+  const commitName = () => {
     const trimmed = nameValue.trim();
-    if (trimmed && trimmed !== playlist.name) {
-      await updatePlaylist(playlist.id, { name: trimmed });
-    }
+    if (trimmed && id && localPlaylist) updatePlaylist(id, { name: trimmed });
     setEditingName(false);
   };
 
-  const startEditDesc = () => {
-    setDescValue(playlist?.description ?? '');
-    setEditingDesc(true);
-    setTimeout(() => descInputRef.current?.focus(), 0);
-  };
-
-  const commitDesc = async () => {
-    if (!playlist) return;
-    const trimmed = descValue.trim();
-    if (trimmed !== playlist.description) {
-      await updatePlaylist(playlist.id, { description: trimmed });
-    }
-    setEditingDesc(false);
+  const handleDeletePlaylist = async () => {
+    if (!id || !localPlaylist) return;
+    await deletePlaylist(id);
+    navigate('/playlists');
   };
 
   if (!playlist) {
     return (
-      <div className="flex items-center justify-center h-[50vh] text-text/40">
+      <div className="flex items-center justify-center h-[50vh] text-text/40 font-mono">
         Playlist not found
       </div>
     );
@@ -245,14 +197,12 @@ export function PlaylistDetailPage() {
 
   const coverSrc = playlist.coverPath
     ? getImageUrl(playlist.coverPath)
-    : (songs.length > 0
-        ? (songs[0].coverPath
-            ? getImageUrl(songs[0].coverPath)
-            : (songs[0] as any).remoteCoverUrl || (songs[0] as any).coverUrl || null)
-        : null);
+    : songs.length > 0
+      ? songs[0].coverPath || (songs[0] as any).remoteCoverUrl || null
+      : null;
 
   return (
-    <div>
+    <div className="pb-16 select-none">
       {/* Back button */}
       <button
         onClick={() => navigate('/playlists')}
@@ -262,489 +212,277 @@ export function PlaylistDetailPage() {
         Back to Playlists
       </button>
 
-      {/* Playlist header */}
+      {/* Header */}
       <div className="relative mb-8">
+        {/* Background blur */}
         {coverSrc && (
           <div className="absolute -inset-6 -top-20 overflow-hidden pointer-events-none">
             <img
               src={coverSrc}
               alt=""
               className="w-full h-64 object-cover opacity-20 blur-3xl scale-150"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = '/default-cover.png';
-              }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-bg/50 to-bg" />
           </div>
         )}
 
         <div className="relative flex gap-6 items-end">
-          {/* Clickable cover — click to change image */}
-          <button
-            onClick={handleChangeCover}
-            className="group/cover relative w-52 h-52 rounded-cover overflow-hidden shrink-0 shadow-xl bg-white/[0.02] flex items-center justify-center border border-white/5 cursor-pointer"
-            title="Change cover image"
-          >
-            {coverSrc ? (
-              <img
-                src={coverSrc}
-                alt={playlist.name}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).src = '/default-cover.png';
-                }}
-              />
-            ) : (
-              <ListMusic size={64} className="text-text/10" />
-            )}
-            {/* Hover overlay */}
-            <div className="absolute inset-0 bg-black/0 group-hover/cover:bg-black/50 transition-all duration-200 flex flex-col items-center justify-center gap-2 opacity-0 group-hover/cover:opacity-100">
-              <Camera size={28} className="text-white drop-shadow" />
-              <span className="text-xs font-semibold text-white">Change cover</span>
+          {/* Cover — clickable only for local playlists */}
+          {localPlaylist ? (
+            <button
+              onClick={handleChangeCover}
+              className="group/cover relative w-48 h-48 rounded-2xl overflow-hidden shrink-0 shadow-2xl bg-white/[0.03] border border-white/5 cursor-pointer"
+            >
+              {coverSrc ? (
+                <img src={coverSrc} alt={playlist.name} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+              ) : (
+                <ListMusic size={48} className="text-text/10 absolute inset-0 m-auto" />
+              )}
+              <div className="absolute inset-0 bg-black/0 group-hover/cover:bg-black/50 transition-all flex flex-col items-center justify-center gap-2 opacity-0 group-hover/cover:opacity-100">
+                <Camera size={24} className="text-white" />
+                <span className="text-[11px] font-semibold text-white">Change cover</span>
+              </div>
+            </button>
+          ) : (
+            <div className="w-48 h-48 rounded-2xl overflow-hidden shrink-0 shadow-2xl bg-white/[0.03] border border-white/10">
+              <SafeImage src={playlist.coverPath} alt={playlist.name} className="w-full h-full object-cover" />
             </div>
-          </button>
+          )}
 
-          <div className="pb-2">
-            <p className="text-[10px] uppercase tracking-widest text-primary font-semibold mb-1">
-              Playlist
-            </p>
+          <div className="pb-2 flex-1 min-w-0">
+            <p className="text-[10px] uppercase tracking-widest text-primary font-semibold mb-1">Playlist</p>
+
+            {/* Editable name (local only) */}
             {editingName ? (
-              <div className="flex items-center gap-2 mb-2 max-w-md">
+              <div className="flex items-center gap-2 mb-2">
                 <input
-                  ref={nameInputRef}
+                  autoFocus
                   value={nameValue}
                   onChange={(e) => setNameValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') commitName();
-                    if (e.key === 'Escape') setEditingName(false);
-                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') commitName(); if (e.key === 'Escape') setEditingName(false); }}
                   className="bg-white/10 border border-white/20 rounded-lg px-3 py-1 text-2xl font-bold text-text focus:outline-none focus:ring-2 focus:ring-primary/50 flex-1"
                 />
-                <button
-                  onClick={commitName}
-                  className="p-1.5 bg-primary text-zinc-950 rounded-lg shadow-glow hover:bg-primary-hover transition-colors shrink-0"
-                  title="Save name"
-                >
-                  <Check size={16} />
-                </button>
-                <button
-                  onClick={() => setEditingName(false)}
-                  className="p-1.5 text-text/50 hover:text-text hover:bg-white/5 rounded-lg transition-colors shrink-0"
-                  title="Cancel"
-                >
-                  <X size={16} />
-                </button>
+                <button onClick={commitName} className="p-1.5 bg-primary text-zinc-950 rounded-lg"><Check size={16} /></button>
+                <button onClick={() => setEditingName(false)} className="p-1.5 text-text/50 hover:text-text rounded-lg"><X size={16} /></button>
               </div>
             ) : (
               <h1
-                onClick={startEditName}
-                className="text-3xl font-bold mb-2 cursor-pointer hover:bg-white/5 px-2 py-0.5 rounded-lg -ml-2 inline-block transition-colors"
-                title="Click to edit name"
+                onClick={() => {
+                  if (!localPlaylist) return;
+                  setNameValue(playlist.name);
+                  setEditingName(true);
+                }}
+                className={`text-3xl font-bold mb-2 truncate ${localPlaylist ? 'cursor-pointer hover:bg-white/5 px-2 py-0.5 rounded-lg -ml-2 inline-block transition-colors' : 'text-white'}`}
+                title={localPlaylist ? 'Click to edit name' : undefined}
               >
                 {playlist.name}
               </h1>
             )}
 
-            {editingDesc ? (
-              <div className="flex flex-col gap-2 max-w-lg mb-3">
-                <textarea
-                  ref={descInputRef}
-                  value={descValue}
-                  onChange={(e) => setDescValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                      commitDesc();
-                    }
-                    if (e.key === 'Escape') setEditingDesc(false);
-                  }}
-                  className="bg-white/10 border border-white/20 rounded-lg px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none h-16 w-full"
-                  placeholder="Add description..."
-                />
-                <div className="flex gap-2 justify-end">
-                  <button
-                    onClick={() => setEditingDesc(false)}
-                    className="px-3 py-1 text-xs font-semibold text-text/55 hover:text-text hover:bg-white/5 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={commitDesc}
-                    className="px-3 py-1 text-xs font-semibold bg-primary text-zinc-950 rounded-lg shadow-glow hover:bg-primary-hover transition-colors"
-                  >
-                    Save
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p
-                onClick={startEditDesc}
-                className={`text-sm mb-3 max-w-lg cursor-pointer hover:bg-white/5 px-2 py-1 rounded-lg -ml-2 transition-colors ${
-                  playlist.description ? 'text-text/50' : 'text-text/25 italic'
-                }`}
-                title="Click to edit description"
-              >
-                {playlist.description || 'Add description...'}
-              </p>
-            )}
+            <p className="text-xs text-text/50 mb-2 truncate max-w-lg">{playlist.description || ''}</p>
             <p className="text-xs text-text/30 mb-4">
               {songs.length} song{songs.length !== 1 ? 's' : ''} • {formatTime(totalDuration)}
+              {followedPlaylist?.lastSyncTime && (
+                <span className="ml-2 inline-flex items-center gap-1">
+                  <Clock size={11} className="inline" />
+                  {' '}Last synced {new Date(followedPlaylist.lastSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
             </p>
 
-            <div className="flex items-center gap-5 mt-4">
-              {/* Big Spotify Green Circular Play/Pause Button */}
+            {/* Controls */}
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Play / Pause */}
               {songs.length > 0 && (
                 <motion.button
                   whileHover={{ scale: 1.06 }}
                   whileTap={{ scale: 0.94 }}
                   onClick={handlePlayAll}
-                  className="w-14 h-14 bg-primary text-zinc-950 rounded-full flex items-center justify-center shadow-lg shadow-primary/25 hover:bg-primary-hover transition-all cursor-pointer shrink-0"
-                  title={isPlaylistPlaying ? 'Pause' : 'Play'}
+                  className="w-12 h-12 bg-primary text-zinc-950 rounded-full flex items-center justify-center shadow-lg shadow-primary/25 hover:bg-primary-hover transition-all cursor-pointer shrink-0"
                 >
-                  {isPlaylistPlaying ? (
-                    <Pause size={24} fill="currentColor" />
-                  ) : (
-                    <Play size={24} fill="currentColor" className="ml-1" />
-                  )}
+                  {isPlaylistPlaying
+                    ? <Pause size={22} fill="currentColor" />
+                    : <Play size={22} fill="currentColor" className="ml-0.5" />}
                 </motion.button>
               )}
 
-              {/* Shuffle Icon Button */}
-              {songs.length > 0 && (
-                <motion.button
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                  onClick={handleShuffleToggle}
-                  className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer ${
-                    shuffleMode === 'on'
-                      ? 'text-primary hover:text-primary-hover'
-                      : 'text-text/50 hover:text-white'
-                  }`}
-                  title={shuffleMode === 'on' ? 'Disable shuffle' : 'Enable shuffle'}
+              {/* Shuffle */}
+              {songs.length > 1 && (
+                <button
+                  onClick={toggleShuffle}
+                  className={`p-2.5 rounded-full border transition-all cursor-pointer ${shuffleMode === 'on' ? 'bg-primary/15 border-primary/40 text-primary' : 'bg-white/5 border-white/10 text-text/50 hover:text-text'}`}
+                  title="Shuffle"
                 >
-                  <Shuffle size={22} />
-                  {shuffleMode === 'on' && (
-                    <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-primary" />
-                  )}
-                </motion.button>
+                  <Shuffle size={16} />
+                </button>
               )}
 
-              {/* Delete Playlist Icon Button */}
-              <motion.button
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                onClick={handleDelete}
-                className="w-10 h-10 rounded-full flex items-center justify-center text-text/40 hover:text-danger hover:bg-white/5 transition-all cursor-pointer"
-                title="Delete Playlist"
+              {/* Refresh / Sync Playlist */}
+              <button
+                onClick={handleSyncNow}
+                disabled={isSyncing}
+                className="p-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-white/10 text-text/60 hover:text-white transition-all cursor-pointer disabled:opacity-50"
+                title="Refresh / Sync Playlist"
               >
-                <Trash2 size={20} />
-              </motion.button>
+                <RefreshCw size={16} className={isSyncing ? 'animate-spin text-primary' : ''} />
+              </button>
 
-              {/* Sort dropdown */}
-              {songs.length > 0 && (
-                <div className="relative ml-auto" ref={dropdownRef}>
-                  <button
-                    onClick={() => setShowSortDropdown(!showSortDropdown)}
-                    className="flex items-center gap-2 px-3.5 py-2 rounded-xl glass text-xs font-semibold hover:bg-white/10 transition-all text-text/60 hover:text-text select-none border border-white/5 cursor-pointer"
-                  >
-                    <span>{getSortLabel(sortBy)}</span>
-                    <List size={14} />
-                  </button>
-
-                  <AnimatePresence>
-                    {showSortDropdown && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.15 }}
-                        className="absolute left-0 mt-1.5 w-44 bg-zinc-900 border border-white/5 rounded-xl shadow-2xl p-1.5 z-50 text-xs text-text/80 font-normal"
-                      >
-                        <div className="px-3 py-1.5 text-[9px] uppercase font-bold text-text/30 tracking-wider">
-                          Sort by
-                        </div>
-                        {[
-                          { value: 'custom', label: 'Custom order' },
-                          { value: 'title', label: 'Title' },
-                          { value: 'artist', label: 'Artist' },
-                          { value: 'album', label: 'Album' },
-                          { value: 'added', label: 'Recently added' },
-                          { value: 'duration', label: 'Duration' },
-                        ].map((opt) => (
-                          <button
-                            key={opt.value}
-                            onClick={() => {
-                              handleSortChange(opt.value as any);
-                              setShowSortDropdown(false);
-                            }}
-                            className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left transition-colors ${
-                              sortBy === opt.value
-                                ? 'text-primary font-semibold bg-white/5'
-                                : 'text-text/60 hover:text-text hover:bg-white/[0.02]'
-                            }`}
-                          >
-                            <span>
-                              {opt.label}
-                              {sortBy === opt.value && (
-                                <span className="ml-1 opacity-60">
-                                  {sortOrder === 'asc' ? '↑' : '↓'}
-                                </span>
-                              )}
-                            </span>
-                            {sortBy === opt.value && <Check size={14} className="text-primary" />}
-                          </button>
-                        ))}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
+              {/* Delete (local playlists only) */}
+              {localPlaylist && (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="p-2.5 rounded-full bg-white/5 border border-white/10 hover:bg-red-500/15 hover:border-red-500/30 text-text/40 hover:text-red-400 transition-all cursor-pointer"
+                  title="Delete Playlist"
+                >
+                  <Trash2 size={16} />
+                </button>
               )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Playlist tracklist */}
-      {songs.length > 0 ? (
-        <div className="space-y-0.5">
-          <div className="grid grid-cols-[40px_1fr_1fr_40px_40px_80px] gap-4 px-4 py-2 text-[10px] uppercase tracking-widest text-text/30 font-semibold border-b border-white/5 mb-1">
-            <span>#</span>
-            <span
-              onClick={() => handleSortChange('title')}
-              className="cursor-pointer hover:text-text/70 transition-colors flex items-center gap-1 select-none w-fit"
-            >
-              Title {sortBy === 'title' && (sortOrder === 'asc' ? '↑' : '↓')}
-            </span>
-            <span
-              onClick={() => handleSortChange('album')}
-              className="cursor-pointer hover:text-text/70 transition-colors flex items-center gap-1 select-none w-fit"
-            >
-              Album {sortBy === 'album' && (sortOrder === 'asc' ? '↑' : '↓')}
-            </span>
-            <span className="text-center">Love</span>
-            <span className="text-center">Action</span>
-            <span className="text-right">Duration</span>
-          </div>
+      {/* Songs List */}
+      <div className="space-y-0.5 mb-10">
+        {songs.map((song, index) => {
+          const isCurrent = currentSong?.id === song.id;
+          const isFav = isFavoriteSong(song.id);
 
-          {sortedSongs.map((song, index) => {
-            const isCurrent = currentSong?.id === song.id;
-            const songCover = song.coverPath
-              ? getImageUrl(song.coverPath)
-              : (song as any).coverUrl || (song as any).remoteCoverUrl || null;
+          return (
+            <div
+              key={song.id}
+              onClick={() => {
+                setQueue(songs, index, playlist.name);
+                setIsPlaying(true);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenu({ song, x: e.clientX, y: e.clientY });
+              }}
+              className={`flex items-center gap-3.5 px-3 py-2.5 rounded-xl hover:bg-white/[0.04] transition-all cursor-pointer group border border-transparent hover:border-white/5 ${isCurrent ? 'bg-white/[0.03]' : ''}`}
+            >
+              {/* Index / Playing indicator */}
+              <div className="w-5 text-center shrink-0">
+                {isCurrent && isPlaying
+                  ? <Music size={13} className="text-primary animate-pulse mx-auto" />
+                  : <span className="text-xs font-mono font-bold text-text/30">{index + 1}</span>}
+              </div>
 
-            return (
-              <motion.div
-                key={song.id}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.02 }}
-                onDoubleClick={() => handlePlaySong(song)}
-                onContextMenu={(event) => {
-                  event.preventDefault();
-                  setContextMenu({ song, x: event.clientX, y: event.clientY });
-                }}
-                className={`group grid grid-cols-[40px_1fr_1fr_40px_40px_80px] gap-4 px-4 py-2.5 rounded-xl cursor-pointer transition-all duration-200 ${
-                  isCurrent
-                    ? 'bg-primary/10 border-l-2 border-primary'
-                    : 'hover:bg-white/[0.03] border-l-2 border-transparent'
-                }`}
+              {/* Artwork */}
+              <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 bg-white/5 border border-white/5">
+                <SafeImage src={song.coverPath} alt="" className="w-full h-full object-cover" />
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className={`text-xs font-semibold truncate transition-colors ${isCurrent ? 'text-primary' : 'text-white group-hover:text-primary'}`}>
+                  {song.title}
+                </p>
+                <p className="text-[11px] text-text/40 truncate">{song.artist}</p>
+              </div>
+
+              {/* Fav & Duration */}
+              <button
+                onClick={(e) => { e.stopPropagation(); toggleFavoriteSong(song.id); }}
+                className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md ${isFav ? 'opacity-100 text-red-400' : 'text-text/30 hover:text-red-400'}`}
               >
-                <div className="flex items-center justify-center">
-                  {isCurrent && isPlaying ? (
-                    <div className="flex gap-0.5 items-end h-3.5">
-                      {[1, 2, 3].map((i) => (
-                        <motion.div
-                          key={i}
-                          className="w-0.5 bg-primary rounded-full"
-                          animate={{ height: ['20%', '100%', '20%'] }}
-                          transition={{ duration: 0.7, repeat: Infinity, delay: i * 0.12 }}
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="text-sm font-semibold tabular-nums text-text/30 group-hover:hidden">
-                      {index + 1}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => handlePlaySong(song)}
-                    className="hidden group-hover:flex items-center justify-center text-text"
-                  >
-                    {isCurrent && isPlaying ? <Pause size={14} /> : <Play size={14} fill="currentColor" />}
-                  </button>
-                </div>
+                <Heart size={13} fill={isFav ? 'currentColor' : 'none'} />
+              </button>
 
-                <div className="flex items-center gap-3 min-w-0">
-                  {songCover ? (
-                    <img
-                      src={songCover}
-                      alt=""
-                      className="w-10 h-10 rounded-lg object-cover shrink-0"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = '/default-cover.png';
-                      }}
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-lg glass flex items-center justify-center shrink-0">
-                      <Music size={16} className="text-text/25" />
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <p
-                      className={`text-sm font-medium truncate ${
-                        isCurrent ? 'text-primary' : 'text-text'
-                      }`}
-                    >
-                      {song.title}
-                    </p>
-                    <p className="text-xs text-text/40 truncate">{song.artist}</p>
-                  </div>
-                </div>
+              <span className="text-xs font-mono text-text/30 shrink-0">{formatTime(song.duration)}</span>
+            </div>
+          );
+        })}
 
-                <div className="flex items-center min-w-0">
-                  <p className="text-xs text-text/40 truncate">{song.album}</p>
-                </div>
-
-                {/* Favorite song */}
-                <div className="flex items-center justify-center">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleFavoriteSong(song.id);
-                    }}
-                    className={`transition-colors p-1 ${
-                      isFavoriteSong(song.id)
-                        ? 'text-primary'
-                        : 'text-text/20 hover:text-text/50 opacity-0 group-hover:opacity-100'
-                    }`}
-                  >
-                    <Heart size={14} fill={isFavoriteSong(song.id) ? 'currentColor' : 'none'} />
-                  </button>
-                </div>
-
-                {/* Remove song from playlist */}
-                <div className="flex items-center justify-center">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeSongFromPlaylist(playlist.id, song.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 hover:text-danger text-text/30 transition-all p-1"
-                    title="Remove from playlist"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-
-                <div className="flex items-center justify-end">
-                  <span className="text-sm text-text/25 tabular-nums font-mono">
-                    {formatTime(song.duration)}
-                  </span>
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="flex flex-col items-center justify-center h-[40vh] text-center">
-          <div className="w-16 h-16 glass rounded-2xl flex items-center justify-center mb-4 text-text/20">
-            <Music size={24} />
+        {songs.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 text-text/30 gap-2">
+            <ListMusic size={36} className="opacity-20" />
+            <p className="text-xs">This playlist is empty</p>
           </div>
-          <p className="text-text/40 text-sm">No songs in this playlist</p>
-          <p className="text-text/20 text-xs mt-1">Add songs from the Songs list or Album view</p>
-        </div>
-      )}
-
-      {/* Recommended Section */}
-      <div className="mt-12 border-t border-white/5 pt-8 pb-12">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-base font-bold text-text">Recommended Songs</h3>
-            <p className="text-xs text-text/30">Based on what's in this playlist</p>
-          </div>
-          <button
-            onClick={fetchRecommendations}
-            disabled={isLoadingRecs}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg glass text-xs font-semibold text-text/50 hover:text-text hover:bg-white/5 transition-all"
-          >
-            <RefreshCw size={12} className={isLoadingRecs ? 'animate-spin' : ''} />
-            Refresh
-          </button>
-        </div>
-
-        {isLoadingRecs ? (
-          <div className="flex items-center justify-center py-8 text-xs text-text/40 gap-2">
-            <RefreshCw size={14} className="animate-spin text-primary" />
-            Finding recommendations...
-          </div>
-        ) : recommendedSongsList.length > 0 ? (
-          <div className="space-y-1">
-            {recommendedSongsList.map((song) => {
-              const songCover = song.coverPath || (song as any).remoteCoverUrl || (song as any).coverUrl || null;
-              return (
-                <div
-                  key={song.id}
-                  className="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.02] group transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-white/5 border border-white/5">
-                      <SafeImage src={songCover} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold truncate text-text">{song.title}</p>
-                      <p className="text-xs text-text/40 truncate">{song.artist}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-4 ml-4">
-                    <span className="text-xs text-text/30 font-mono hidden md:inline truncate max-w-[150px]">
-                      {song.album}
-                    </span>
-                    <button
-                      onClick={() => addSongToPlaylist(playlist.id, song)}
-                      className="px-3 py-1.5 rounded-lg border border-white/10 hover:border-white/30 text-xs font-bold text-text hover:bg-white/5 transition-all shrink-0"
-                    >
-                      Add
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="text-xs text-text/30 italic">No recommendations available</p>
         )}
       </div>
 
+      {/* Archived Tracks */}
+      {followedPlaylist && followedPlaylist.archivedTracks.length > 0 && (
+        <div className="space-y-3 mb-10 bg-white/[0.02] border border-white/5 rounded-2xl p-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold text-amber-400 font-mono uppercase flex items-center gap-2">
+              <Archive size={14} /> Archived Tracks ({followedPlaylist.archivedTracks.length})
+            </h3>
+            <button
+              onClick={() => followedStore.clearArchivedTracks(followedPlaylist.id)}
+              className="text-[10px] font-mono text-text/40 hover:text-red-400 transition-colors"
+            >
+              Clear
+            </button>
+          </div>
+          <div className="space-y-1">
+            {followedPlaylist.archivedTracks.map((song, i) => (
+              <div key={`${song.id}_arch_${i}`} className="flex items-center gap-3 p-2 rounded-lg bg-white/5 text-xs text-text/60">
+                <SafeImage src={song.coverPath} className="w-7 h-7 rounded shrink-0 object-cover" />
+                <span className="font-semibold text-white truncate">{song.title}</span>
+                <span className="text-text/40 truncate">— {song.artist}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Recommended Songs */}
+      {recommendedSongsList.length > 0 && (
+        <div className="space-y-2 border-t border-white/5 pt-6">
+          <h2 className="text-xs font-bold text-text/40 uppercase tracking-wider font-mono mb-3">
+            Recommended
+          </h2>
+          {recommendedSongsList.map((song) => (
+            <div
+              key={song.id}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/[0.04] cursor-pointer group"
+              onClick={() => {
+                setQueue([...songs, song], songs.length, playlist.name);
+                setIsPlaying(true);
+              }}
+            >
+              <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 bg-white/5 border border-white/5">
+                <SafeImage src={song.coverPath} className="w-full h-full object-cover" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-semibold text-white truncate group-hover:text-primary transition-colors">{song.title}</p>
+                <p className="text-[11px] text-text/40 truncate">{song.artist}</p>
+              </div>
+              {localPlaylist && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); addSongToPlaylist(id!, song); }}
+                  className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-primary/15 text-primary hover:bg-primary/25 transition-all text-[10px] font-bold"
+                >
+                  + Add
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Delete Confirm Modal */}
       <AnimatePresence>
         {showDeleteConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-zinc-900 border border-white/10 p-6 rounded-2xl shadow-2xl text-center"
+              className="w-full max-w-sm bg-[#141416] border border-white/10 p-6 rounded-2xl shadow-2xl space-y-4"
             >
-              <h3 className="text-base font-bold mb-2 text-text">Delete Playlist</h3>
-              <p className="text-xs text-text/50 mb-6">
-                Are you sure you want to delete this playlist? This action cannot be undone.
+              <h3 className="text-sm font-bold text-white">Delete Playlist?</h3>
+              <p className="text-xs text-text/50">
+                Are you sure you want to delete <strong>"{playlist.name}"</strong>? This cannot be undone.
               </p>
-              <div className="flex gap-3 justify-center">
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-text/60 hover:text-text hover:bg-white/5 transition-colors border border-white/5"
-                >
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 text-xs font-semibold text-text/60 hover:text-text hover:bg-white/5 rounded-xl transition-colors">
                   Cancel
                 </button>
-                <button
-                  onClick={() => {
-                    if (playlist) {
-                      deletePlaylist(playlist.id);
-                      setShowDeleteConfirm(false);
-                      navigate('/playlists');
-                    }
-                  }}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-red-600 text-white hover:bg-red-500 transition-colors shadow-glow"
-                >
+                <button onClick={handleDeletePlaylist} className="px-4 py-2 text-xs font-bold bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors cursor-pointer">
                   Delete
                 </button>
               </div>
@@ -752,6 +490,8 @@ export function PlaylistDetailPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Song Context Menu */}
       {contextMenu && (
         <SongContextMenu
           song={contextMenu.song}
@@ -760,18 +500,18 @@ export function PlaylistDetailPage() {
           onClose={() => setContextMenu(null)}
           onEditSong={() => setEditingSong(contextMenu.song)}
           onViewDetails={() => setViewingDetailsSong(contextMenu.song)}
-          onRemoveFromPlaylist={() => {
-            if (playlist) {
-              removeSongFromPlaylist(playlist.id, contextMenu.song.id);
-            }
-          }}
+          onRemoveFromPlaylist={localPlaylist ? () => removeSongFromPlaylist(id!, contextMenu.song.id) : undefined}
         />
       )}
+
+      {/* Edit Song Modal */}
       <EditSongModal
         song={editingSong}
         isOpen={!!editingSong}
         onClose={() => setEditingSong(null)}
       />
+
+      {/* Song Details Modal */}
       <SongDetailsModal
         song={viewingDetailsSong}
         isOpen={!!viewingDetailsSong}

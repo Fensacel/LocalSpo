@@ -98,13 +98,23 @@ export function AudioEngine() {
     }
   }, [isPlaying]);
 
-  // ── Realtime active listening tracker & play count trigger (Requirements 11 & 13) ──
+  // ── Realtime active listening tracker & precise duration recording ──
   const activePlayedSecondsRef = useRef<number>(0);
-  const hasCountedCurrentSongRef = useRef<boolean>(false);
+  const isSongCompletedRef = useRef<boolean>(false);
+  const prevSongIdRef = useRef<string | null>(null);
 
   useEffect(() => {
+    // When song changes, if previous song was not completed to the end, record its actual listened time
+    if (prevSongIdRef.current && prevSongIdRef.current !== currentSong?.id && !isSongCompletedRef.current) {
+      const listened = activePlayedSecondsRef.current;
+      if (listened >= 2) {
+        useStatsStore.getState().recordListeningTime(listened);
+      }
+    }
+
     activePlayedSecondsRef.current = 0;
-    hasCountedCurrentSongRef.current = false;
+    isSongCompletedRef.current = false;
+    prevSongIdRef.current = currentSong?.id || null;
   }, [currentSong?.id]);
 
   useEffect(() => {
@@ -115,29 +125,6 @@ export function AudioEngine() {
       if (!audio || audio.paused || audio.seeking || audio.readyState < 3) return;
 
       activePlayedSecondsRef.current += 1;
-      const trackDuration = audio.duration || currentSong.duration || 0;
-      const playedSecs = activePlayedSecondsRef.current;
-
-      // Trigger play count record when 30s reached OR 50% duration reached
-      if (
-        !hasCountedCurrentSongRef.current &&
-        (playedSecs >= 30 || (trackDuration > 0 && playedSecs >= trackDuration * 0.5))
-      ) {
-        hasCountedCurrentSongRef.current = true;
-        try {
-          useStatsStore.getState().recordPlay({
-            songId: currentSong.id,
-            title: currentSong.title || 'Unknown',
-            artist: currentSong.artist || '',
-            album: currentSong.album || '',
-            coverPath: currentSong.coverPath || (currentSong as any).remoteCoverUrl || (currentSong as any).coverUrl || (currentSong as any).cover || null,
-            duration: Math.max(playedSecs, Math.floor(trackDuration)),
-            timestamp: Date.now(),
-          });
-        } catch (e) {
-          console.warn('[AudioEngine] recordPlay failed:', e);
-        }
-      }
     }, 1000);
 
     return () => clearInterval(timer);
@@ -536,17 +523,22 @@ export function AudioEngine() {
         return;
       }
 
-      // Record play in stats store
+      // Record completed play only when song finishes completely to the end
       try {
         const song = usePlayerStore.getState().currentSong;
-        if (song) {
+        if (song && !isSongCompletedRef.current) {
+          isSongCompletedRef.current = true;
+          const listenedSecs = activePlayedSecondsRef.current > 0
+            ? activePlayedSecondsRef.current
+            : Math.floor(audio.duration || song.duration || 0);
+
           useStatsStore.getState().recordPlay({
             songId: song.id,
             title: song.title || 'Unknown',
             artist: (song as any).artist || '',
             album: (song as any).album || '',
             coverPath: song.coverPath || (song as any).remoteCoverUrl || (song as any).coverUrl || (song as any).cover || null,
-            duration: Math.floor(audio.duration || 0),
+            duration: listenedSecs,
             timestamp: Date.now(),
           });
         }

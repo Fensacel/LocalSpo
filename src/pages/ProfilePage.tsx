@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -16,11 +16,18 @@ import {
   Disc3,
   Flame,
   Tag,
+  MessageSquare,
+  UserPlus,
+  UserCheck,
 } from 'lucide-react';
 import { useProfileStore } from '@/stores/useProfileStore';
 import { useStatsStore } from '@/stores/useStatsStore';
 import { usePlaylistStore } from '@/stores';
+import { useChatStore } from '@/stores/useChatStore';
 import { SafeAvatar, SafeBanner, SafeImage } from '@/components/SafeImage';
+import { useAuth } from '@/hooks/useAuth';
+import { ProfileService } from '@/services/profileService';
+import { SocialChatDrawer } from '@/components/SocialChatDrawer';
 
 function StatCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
   return (
@@ -34,13 +41,48 @@ function StatCard({ label, value, icon }: { label: string; value: string; icon: 
 export function ProfilePage() {
   const { username } = useParams<{ username: string }>();
   const navigate = useNavigate();
-  const { profile, loadProfile, saveProfile, updateAvatar, updateBanner } = useProfileStore();
+  const { user, profile: authProfile, refreshProfile } = useAuth();
+  const { profile: localProfile, loadProfile, saveProfile, updateAvatar, updateBanner } = useProfileStore();
   const stats = useStatsStore();
   const { playlists } = usePlaylistStore();
+  const { isFriend, toggleFriend, fetchFriends } = useChatStore();
   const [isEditing, setIsEditing] = useState(false);
+  const [showChatModal, setShowChatModal] = useState(false);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchFriends(user.id);
+    }
+  }, [user?.id, fetchFriends]);
+
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
 
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+
+  // Effective profile: merge Supabase Auth Profile with Local Profile
+  const profile = authProfile ? {
+    ...localProfile,
+    id: authProfile.id,
+    username: authProfile.username,
+    displayName: authProfile.display_name,
+    avatarUrl: avatarPreview || authProfile.avatar_url || localProfile?.avatarUrl || null,
+    bannerUrl: bannerPreview || authProfile.banner_url || localProfile?.bannerUrl || null,
+    bio: authProfile.bio || localProfile?.bio || '',
+    country: localProfile?.country || '',
+    favoriteGenres: localProfile?.favoriteGenres || [],
+    favoriteArtists: localProfile?.favoriteArtists || [],
+    favoriteAlbumIds: localProfile?.favoriteAlbumIds || [],
+    favoriteSongIds: localProfile?.favoriteSongIds || [],
+    joinDate: localProfile?.joinDate || Date.now(),
+    isVerified: localProfile?.isVerified || false,
+    followersCount: localProfile?.followersCount || 0,
+    followingCount: localProfile?.followingCount || 0,
+    following: localProfile?.following || [],
+    followers: localProfile?.followers || [],
+    publicPlaylistIds: localProfile?.publicPlaylistIds || [],
+  } : localProfile;
 
   const [editForm, setEditForm] = useState({
     displayName: '',
@@ -58,58 +100,103 @@ export function ProfilePage() {
   useEffect(() => {
     if (profile) {
       setEditForm({
-        displayName: profile.displayName,
-        username: profile.username,
-        bio: profile.bio,
-        country: profile.country,
-        favoriteGenres: profile.favoriteGenres,
+        displayName: profile.displayName || '',
+        username: profile.username || '',
+        bio: profile.bio || '',
+        country: profile.country || '',
+        favoriteGenres: profile.favoriteGenres || [],
       });
     }
-  }, [profile]);
+  }, [profile?.displayName, profile?.username, profile?.bio]);
 
   const isOwnProfile = !username || username === profile?.username || username === 'me';
 
-  const handleSave = async () => {
-    if (avatarPreview) {
-      await updateAvatar(avatarPreview);
-      setAvatarPreview(null);
-    }
-    if (bannerPreview) {
-      await updateBanner(bannerPreview);
-      setBannerPreview(null);
-    }
-    await saveProfile(editForm);
-    setIsEditing(false);
+  const handleAvatarFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) setAvatarPreview(dataUrl);
+    };
+    reader.readAsDataURL(file);
   };
 
-  const handleAvatarSelect = async () => {
+  const handleBannerFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) setBannerPreview(dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleAvatarClick = async () => {
     if (!isOwnProfile || !isEditing) return;
-    try {
-      if (window.electronAPI?.profile?.uploadAvatar) {
+    if (window.electronAPI?.profile?.uploadAvatar) {
+      try {
         const file = await window.electronAPI.dialog.openFile({
           filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
         });
         if (file) {
           const relPath = await window.electronAPI.profile.uploadAvatar(file);
-          if (relPath) await updateAvatar(relPath);
+          if (relPath) {
+            setAvatarPreview(relPath);
+            return;
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    }
+    avatarInputRef.current?.click();
   };
 
-  const handleBannerSelect = async () => {
+  const handleBannerClick = async () => {
     if (!isOwnProfile || !isEditing) return;
-    try {
-      if (window.electronAPI?.profile?.uploadBanner) {
+    if (window.electronAPI?.profile?.uploadBanner) {
+      try {
         const file = await window.electronAPI.dialog.openFile({
           filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
         });
         if (file) {
           const relPath = await window.electronAPI.profile.uploadBanner(file);
-          if (relPath) await updateBanner(relPath);
+          if (relPath) {
+            setBannerPreview(relPath);
+            return;
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    }
+    bannerInputRef.current?.click();
+  };
+
+  const handleSave = async () => {
+    let finalAvatar = avatarPreview || profile?.avatarUrl || null;
+    let finalBanner = bannerPreview || profile?.bannerUrl || null;
+
+    if (avatarPreview) {
+      await updateAvatar(avatarPreview);
+    }
+    if (bannerPreview) {
+      await updateBanner(bannerPreview);
+    }
+    await saveProfile(editForm);
+
+    if (user?.id) {
+      await ProfileService.updateProfile(user.id, {
+        display_name: editForm.displayName,
+        username: editForm.username,
+        bio: editForm.bio,
+        avatar_url: finalAvatar,
+        banner_url: finalBanner,
+      });
+      await refreshProfile();
+    }
+
+    setAvatarPreview(null);
+    setBannerPreview(null);
+    setIsEditing(false);
   };
 
   const topSongs = stats.getTopSongs(5);
@@ -134,10 +221,13 @@ export function ProfilePage() {
       animate={{ opacity: 1, y: 0 }}
       className="max-w-4xl mx-auto space-y-8 select-none pb-12"
     >
+      <input ref={avatarInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarFileSelect} />
+      <input ref={bannerInputRef} type="file" accept="image/*" className="hidden" onChange={handleBannerFileSelect} />
+
       {/* ── Banner ──────────────────────────────────────────────── */}
       <div
         className={`relative h-44 md:h-60 rounded-2xl overflow-hidden border border-white/5 ${isEditing && isOwnProfile ? 'cursor-pointer group' : ''}`}
-        onClick={handleBannerSelect}
+        onClick={handleBannerClick}
       >
         <SafeBanner src={bannerPreview || profile.bannerUrl}>
           {isEditing && isOwnProfile && (
@@ -154,7 +244,7 @@ export function ProfilePage() {
         {/* Avatar */}
         <div
           className={`relative w-28 h-28 md:w-36 md:h-36 rounded-full border-4 border-[#0B0B0D] overflow-hidden bg-gradient-to-br from-[#0070F3] to-purple-700 shrink-0 ${isEditing && isOwnProfile ? 'cursor-pointer group' : ''}`}
-          onClick={handleAvatarSelect}
+          onClick={handleAvatarClick}
         >
           <SafeAvatar src={avatarPreview || profile.avatarUrl} alt="Avatar" sizeClassName="w-full h-full" />
           {isEditing && isOwnProfile && (
@@ -200,34 +290,71 @@ export function ProfilePage() {
           )}
         </div>
 
-        {/* Edit / Save actions */}
-        {isOwnProfile && (
-          <div className="flex gap-2 pb-2">
-            {isEditing ? (
-              <>
+        {/* Edit / Save / Message / Add Friend actions */}
+        <div className="flex items-center gap-2 pb-2">
+          {!isEditing && (
+            <button
+              onClick={() => setShowChatModal(true)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0070F3] text-white text-sm font-semibold hover:bg-[#0070F3]/80 transition-all cursor-pointer shadow-glow"
+            >
+              <MessageSquare size={14} /> Message
+            </button>
+          )}
+
+          {!isEditing && !isOwnProfile && profile?.id && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (user?.id && profile.id) {
+                  await toggleFriend(user.id, profile.id);
+                }
+              }}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+                isFriend(profile.id)
+                  ? 'bg-white/10 text-white border border-white/20 hover:bg-red-500/20 hover:text-red-400'
+                  : 'bg-[#0070F3] text-white hover:bg-[#005bb5] shadow-glow'
+              }`}
+            >
+              {isFriend(profile.id) ? (
+                <>
+                  <UserCheck size={14} /> Friends ✓
+                </>
+              ) : (
+                <>
+                  <UserPlus size={14} /> Add Friend
+                </>
+              )}
+            </button>
+          )}
+
+          {isOwnProfile && (
+            <>
+              {isEditing ? (
+                <>
+                  <button
+                    onClick={handleSave}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0070F3] text-white text-sm font-semibold hover:bg-[#0070F3]/80 transition-all cursor-pointer shadow-glow"
+                  >
+                    <Save size={14} /> Save
+                  </button>
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 text-[#9CA3AF] text-sm hover:bg-white/10 transition-all cursor-pointer"
+                  >
+                    <X size={14} />
+                  </button>
+                </>
+              ) : (
                 <button
-                  onClick={handleSave}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0070F3] text-white text-sm font-semibold hover:bg-[#0070F3]/80 transition-all cursor-pointer shadow-glow"
+                  onClick={() => setIsEditing(true)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 transition-all cursor-pointer"
                 >
-                  <Save size={14} /> Save
+                  <Edit3 size={14} /> Edit Profile
                 </button>
-                <button
-                  onClick={() => setIsEditing(false)}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 text-[#9CA3AF] text-sm hover:bg-white/10 transition-all cursor-pointer"
-                >
-                  <X size={14} />
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 transition-all cursor-pointer"
-              >
-                <Edit3 size={14} /> Edit Profile
-              </button>
-            )}
-          </div>
-        )}
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Bio display */}
@@ -396,6 +523,13 @@ export function ProfilePage() {
           )}
         </section>
       )}
+
+      {/* Social Chat Drawer */}
+      <SocialChatDrawer
+        isOpen={showChatModal}
+        onClose={() => setShowChatModal(false)}
+        initialUserId={isOwnProfile ? undefined : profile?.id}
+      />
     </motion.div>
   );
 }

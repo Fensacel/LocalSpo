@@ -4,6 +4,7 @@ import { Search, X, Music, Mic2, Disc3, ListMusic, User, ArrowRight } from 'luci
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLibraryStore, usePlayerStore, usePlaylistStore } from '@/stores';
 import { useProfileStore } from '@/stores/useProfileStore';
+import { useFollowedPlaylistStore } from '@/stores/useFollowedPlaylistStore';
 import { useSpotifyStore } from '@/modules/downloader/stores/useSpotifyStore';
 import { useStreamingStore } from '@/stores/useStreamingStore';
 import { SafeAvatar, SafeImage } from '@/components/SafeImage';
@@ -109,9 +110,25 @@ export function UniversalSearchBar() {
       ].slice(0, 3)
     : [];
 
-  // Playlist matches
+  // Playlist matches (Local & Followed Streaming)
+  const followedPlaylists = useFollowedPlaylistStore((s) => s.followedPlaylists);
   const matchedPlaylists = q
-    ? playlists.filter((p) => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)).slice(0, 3)
+    ? [
+        ...followedPlaylists.filter((f) => f.name.toLowerCase().includes(q) || f.description.toLowerCase().includes(q)).map((f) => ({
+          id: f.id,
+          name: f.name,
+          coverPath: f.coverPath,
+          trackCount: f.trackCount,
+          isFollowing: true,
+        })),
+        ...playlists.filter((p) => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)).map((p) => ({
+          id: p.id,
+          name: p.name,
+          coverPath: p.coverPath,
+          trackCount: p.songIds.length,
+          isFollowing: false,
+        })),
+      ].slice(0, 4)
     : [];
 
   // User matches
@@ -283,17 +300,25 @@ export function UniversalSearchBar() {
                           setIsOpen(false);
                           navigate(`/playlists/${pl.id}`);
                         }}
-                        className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-white/10 transition-colors cursor-pointer group"
+                        className="flex items-center justify-between gap-2.5 px-3 py-1.5 hover:bg-white/10 transition-colors cursor-pointer group"
                       >
-                        <div className="w-8 h-8 rounded-lg bg-white/5 overflow-hidden shrink-0 flex items-center justify-center border border-white/5">
-                          <SafeImage src={pl.coverPath} alt="" className="w-full h-full object-cover" fallback={<ListMusic size={12} className="text-[#8B90A0]" />} />
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <div className="w-8 h-8 rounded-lg bg-white/5 overflow-hidden shrink-0 flex items-center justify-center border border-white/5">
+                            <SafeImage src={pl.coverPath} alt="" className="w-full h-full object-cover" fallback={<ListMusic size={12} className="text-[#8B90A0]" />} />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold text-white group-hover:text-emerald-400 truncate">
+                              {pl.name}
+                            </p>
+                            <p className="text-[10px] font-mono text-[#8B90A0] truncate">{pl.trackCount} tracks</p>
+                          </div>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold text-white group-hover:text-emerald-400 truncate">
-                            {pl.name}
-                          </p>
-                          <p className="text-[10px] font-mono text-[#8B90A0] truncate">{pl.songIds.length} tracks</p>
-                        </div>
+
+                        {pl.isFollowing && (
+                          <span className="px-2 py-0.5 rounded-full text-[9px] font-mono font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 shrink-0">
+                            Following ✓
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>

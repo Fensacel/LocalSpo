@@ -9,34 +9,19 @@ import {
   ListMusic,
   BarChart2,
   LogOut,
+  LogIn,
 } from 'lucide-react';
 import { useProfileStore } from '@/stores/useProfileStore';
+import { useAuth } from '@/hooks/useAuth';
 import { AnimatePresence, motion } from 'framer-motion';
 import { SafeAvatar } from '@/components/SafeImage';
-
-interface MenuItem {
-  icon: React.ReactNode;
-  label: string;
-  path?: string;
-  divider?: boolean;
-  disabled?: boolean;
-}
-
-const MENU_ITEMS: MenuItem[] = [
-  { icon: <User size={14} />, label: 'Profile', path: '/profile' },
-  { icon: <BarChart2 size={14} />, label: 'Stats', path: '/stats' },
-  { icon: <ListMusic size={14} />, label: 'My Playlists', path: '/playlists' },
-  { icon: <Heart size={14} />, label: 'Liked Songs', path: '/favorites' },
-  { icon: <Download size={14} />, label: 'Downloads', path: '/downloads' },
-  { icon: <Settings size={14} />, label: 'Settings', path: '/settings', divider: true },
-  { icon: <LogOut size={14} />, label: 'Logout', disabled: true },
-];
 
 export function ProfileDropdown() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const profile = useProfileStore((s) => s.profile);
+  const localProfile = useProfileStore((s) => s.profile);
+  const { user, profile: cloudProfile, signOut } = useAuth();
 
   // Close on outside click
   useEffect(() => {
@@ -49,15 +34,15 @@ export function ProfileDropdown() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const handleItem = (item: MenuItem) => {
-    if (item.disabled || !item.path) return;
-    setOpen(false);
-    navigate(item.path);
-  };
+  const avatarSrc = cloudProfile?.avatar_url || localProfile?.avatarUrl || null;
+  const displayName = cloudProfile?.display_name || localProfile?.displayName || 'User';
+  const username = cloudProfile?.username || localProfile?.username || 'me';
 
-  const avatarSrc = profile?.avatarUrl ?? null;
-  const displayName = profile?.displayName || 'User';
-  const username = profile?.username || 'me';
+  const handleLogout = async () => {
+    setOpen(false);
+    await signOut();
+    navigate('/login');
+  };
 
   return (
     <div ref={ref} className="relative">
@@ -106,29 +91,77 @@ export function ProfileDropdown() {
 
             {/* Menu items */}
             <div className="py-1">
-              {MENU_ITEMS.map((item, i) => (
-                <div key={i}>
-                  {item.divider && <div className="border-t border-white/5 my-1" />}
-                  <button
-                    type="button"
-                    onClick={() => handleItem(item)}
-                    disabled={item.disabled}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs transition-all cursor-pointer ${
-                      item.disabled
-                        ? 'text-[#4B5563] cursor-not-allowed'
-                        : 'text-[#9CA3AF] hover:text-white hover:bg-white/5'
-                    }`}
-                  >
-                    {item.icon}
-                    <span>{item.label}</span>
-                    {item.disabled && (
-                      <span className="ml-auto text-[9px] font-mono text-[#4B5563] bg-white/5 px-1.5 py-0.5 rounded">
-                        soon
-                      </span>
-                    )}
-                  </button>
-                </div>
-              ))}
+              <button
+                type="button"
+                onClick={() => { setOpen(false); navigate('/profile'); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-[#9CA3AF] hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+              >
+                <User size={14} />
+                <span>Profile</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setOpen(false); navigate('/stats'); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-[#9CA3AF] hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+              >
+                <BarChart2 size={14} />
+                <span>Stats</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setOpen(false); navigate('/playlists'); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-[#9CA3AF] hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+              >
+                <ListMusic size={14} />
+                <span>My Playlists</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setOpen(false); navigate('/favorites'); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-[#9CA3AF] hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+              >
+                <Heart size={14} />
+                <span>Liked Songs</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setOpen(false); navigate('/downloads'); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-[#9CA3AF] hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+              >
+                <Download size={14} />
+                <span>Downloads</span>
+              </button>
+
+              <div className="border-t border-white/5 my-1" />
+
+              <button
+                type="button"
+                onClick={() => { setOpen(false); navigate('/settings'); }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-[#9CA3AF] hover:text-white hover:bg-white/5 transition-all cursor-pointer"
+              >
+                <Settings size={14} />
+                <span>Settings</span>
+              </button>
+
+              {user ? (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all cursor-pointer"
+                >
+                  <LogOut size={14} />
+                  <span>Logout</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { setOpen(false); navigate('/login'); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-[#0070F3] hover:text-white hover:bg-[#0070F3]/20 transition-all cursor-pointer"
+                >
+                  <LogIn size={14} />
+                  <span>Sign In</span>
+                </button>
+              )}
             </div>
           </motion.div>
         )}

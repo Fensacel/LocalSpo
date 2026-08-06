@@ -1,19 +1,20 @@
 import { usePlaylistStore, useLibraryStore } from '@/stores';
-import { ListMusic, Plus, Pin, Heart, Trash2, Camera, Radio } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
+import { useFollowedPlaylistStore } from '@/stores/useFollowedPlaylistStore';
+import { ListMusic, Plus, Radio, RefreshCw } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ImportPlaylistModal } from '@/components/ImportPlaylistModal';
-import { getImageUrl } from '@/utils';
 import { platformService } from '@/platform';
+import { SafeImage } from '@/components/SafeImage';
 
 export function PlaylistsPage() {
-  const { playlists, createPlaylist, deletePlaylist, togglePinPlaylist, toggleFavoritePlaylist } =
-    usePlaylistStore();
+  const { playlists, createPlaylist } = usePlaylistStore();
   const { getSongById } = useLibraryStore();
+  const { followedPlaylists, syncAll } = useFollowedPlaylistStore();
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [playlistToDelete, setPlaylistToDelete] = useState<string | null>(null);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [newPlaylistDesc, setNewPlaylistDesc] = useState('');
   const [newPlaylistCover, setNewPlaylistCover] = useState<string | null>(null);
@@ -46,263 +47,180 @@ export function PlaylistsPage() {
     }
   };
 
-  // Sort playlists: pinned first, then newest
-  const sortedPlaylists = [...playlists].sort((a, b) => {
-    if (a.isPinned && !b.isPinned) return -1;
-    if (!a.isPinned && b.isPinned) return 1;
-    return b.createdAt - a.createdAt;
-  });
+  // Combine & deduplicate local and streaming playlists seamlessly into one list
+  const displayItems = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; description?: string; coverPath?: string | null; trackCount: number }>();
+
+    for (const p of playlists) {
+      const count = p.songIds.filter((sid) => !!getSongById(sid)).length;
+      map.set(p.id, {
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        coverPath: p.coverPath,
+        trackCount: count,
+      });
+    }
+
+    for (const f of followedPlaylists) {
+      const existing = map.get(f.id) || Array.from(map.values()).find((item) => item.name === f.name);
+      if (existing) {
+        existing.coverPath = existing.coverPath || f.coverPath;
+        existing.trackCount = Math.max(existing.trackCount, f.trackCount);
+        map.set(existing.id, existing);
+      } else {
+        map.set(f.id, {
+          id: f.id,
+          name: f.name,
+          description: f.description,
+          coverPath: f.coverPath,
+          trackCount: f.trackCount,
+        });
+      }
+    }
+
+    return Array.from(map.values());
+  }, [playlists, followedPlaylists, getSongById]);
 
   return (
-    <div className="relative">
-      <div className="flex items-center justify-between mb-6">
+    <div className="relative pb-16 select-none">
+      {/* Header & Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
-          <h1 className="text-2xl font-bold">Playlists</h1>
-          <p className="text-sm text-text/40 mt-1">
-            {playlists.length} playlist{playlists.length !== 1 ? 's' : ''} created
+          <h1 className="text-2xl font-bold text-white">Playlists</h1>
+          <p className="text-xs text-text/40 mt-0.5">
+            {displayItems.length} playlist{displayItems.length !== 1 ? 's' : ''} in library
           </p>
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {followedPlaylists.length > 0 && (
+            <button
+              onClick={() => syncAll()}
+              className="flex items-center gap-2 px-3 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-semibold text-white hover:bg-white/10 transition-colors cursor-pointer"
+            >
+              <RefreshCw size={14} className="text-[#0070F3]" />
+              Sync All
+            </button>
+          )}
+
           <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
             onClick={() => setShowImportModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 rounded-button text-sm font-semibold text-sky-400 transition-all shadow-sm"
+            className="flex items-center gap-2 px-3.5 py-2 bg-sky-500/15 hover:bg-sky-500/25 border border-sky-500/30 rounded-xl text-xs font-bold text-sky-400 transition-all cursor-pointer"
           >
-            <Radio size={16} />
-            Import Spotify Playlist
+            <Radio size={14} />
+            Import / Follow
           </motion.button>
+
           <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
+            whileHover={{ scale: 1.03 }}
+            whileTap={{ scale: 0.97 }}
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-primary rounded-button text-sm font-semibold text-zinc-950 shadow-glow hover:bg-primary-hover transition-colors"
+            className="flex items-center gap-2 px-3.5 py-2 bg-primary rounded-xl text-xs font-bold text-zinc-950 shadow-glow hover:bg-primary-hover transition-colors cursor-pointer"
           >
-            <Plus size={16} />
+            <Plus size={14} />
             New Playlist
           </motion.button>
         </div>
       </div>
 
-      {sortedPlaylists.length > 0 ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
-          {sortedPlaylists.map((playlist) => {
-            const coverSrc = playlist.coverPath
-              ? getImageUrl(playlist.coverPath)
-              : null;
-            const validSongCount = playlist.songIds.filter((sid) => !!getSongById(sid)).length;
+      {/* Playlists Grid */}
+      {displayItems.length > 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {displayItems.map((item) => (
+            <motion.div
+              key={item.id}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => navigate(`/playlists/${item.id}`)}
+              className="group relative bg-[#141416] p-3.5 rounded-2xl border border-white/5 hover:border-white/10 transition-all cursor-pointer flex flex-col"
+            >
+              <div className="aspect-square rounded-xl overflow-hidden mb-3 bg-white/5 relative border border-white/5">
+                <SafeImage src={item.coverPath} alt={item.name} className="w-full h-full object-cover" />
+              </div>
 
-            return (
-              <motion.div
-                key={playlist.id}
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                onClick={() => navigate(`/playlists/${playlist.id}`)}
-                className="group cursor-pointer relative"
-              >
-                <div className="relative rounded-card overflow-hidden aspect-square mb-3 shadow-glass bg-white/[0.02]">
-                  {coverSrc ? (
-                    <img
-                      src={coverSrc}
-                      alt={playlist.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-text/10 group-hover:text-primary/25 transition-colors">
-                      <ListMusic size={48} strokeWidth={1.2} />
-                    </div>
-                  )}
-
-                  {/* Actions overlay */}
-                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        togglePinPlaylist(playlist.id);
-                      }}
-                      className={`p-1.5 rounded-lg glass hover:scale-110 transition-transform ${
-                        playlist.isPinned ? 'text-primary' : 'text-text/50 hover:text-text'
-                      }`}
-                    >
-                      <Pin size={12} fill={playlist.isPinned ? 'currentColor' : 'none'} />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleFavoritePlaylist(playlist.id);
-                      }}
-                      className={`p-1.5 rounded-lg glass hover:scale-110 transition-transform ${
-                        playlist.isFavorite ? 'text-red-500' : 'text-text/50 hover:text-text'
-                      }`}
-                    >
-                      <Heart size={12} fill={playlist.isFavorite ? 'currentColor' : 'none'} />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPlaylistToDelete(playlist.id);
-                      }}
-                      className="p-1.5 rounded-lg glass hover:scale-110 hover:text-danger text-text/50 transition-all"
-                    >
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
-
-                  {/* Songs counter indicator */}
-                  <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded-md glass text-[10px] font-mono tracking-wide text-text/70">
-                    {validSongCount} song{validSongCount !== 1 ? 's' : ''}
-                  </div>
-                </div>
-
-                <div className="px-1">
-                  <div className="flex items-center gap-1.5">
-                    {playlist.isPinned && (
-                      <Pin size={10} className="text-primary transform rotate-45" />
-                    )}
-                    <p className="text-sm font-semibold truncate flex-1">{playlist.name}</p>
-                  </div>
-                  <p className="text-xs text-text/30 truncate mt-0.5">
-                    {playlist.description || 'No description'}
-                  </p>
-                </div>
-              </motion.div>
-            );
-          })}
+              <h3 className="text-xs font-bold text-white truncate group-hover:text-[#0070F3] transition-colors">
+                {item.name}
+              </h3>
+              <p className="text-[11px] text-text/40 truncate mt-0.5">
+                {item.trackCount} tracks
+              </p>
+            </motion.div>
+          ))}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center h-[50vh] text-center">
-          <div className="w-24 h-24 glass rounded-2xl flex items-center justify-center mb-4">
-            <ListMusic size={36} className="text-text/20" />
-          </div>
-          <p className="text-text/40 text-sm">No playlists yet</p>
-          <p className="text-text/20 text-xs mt-1">Create a playlist to organize your music</p>
+        <div className="flex flex-col items-center justify-center py-20 text-text/30 gap-2 bg-[#141416] border border-white/5 rounded-2xl">
+          <ListMusic size={40} className="opacity-20 text-[#0070F3]" />
+          <p className="text-xs font-semibold text-white">No playlists found</p>
         </div>
       )}
 
-      {/* Create Modal overlay */}
-      <AnimatePresence>
-        {showCreateModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="w-full max-w-md glass rounded-2xl p-6 shadow-glow"
-            >
-              <h3 className="text-lg font-bold mb-4">Create Playlist</h3>
-              <form onSubmit={handleCreate} className="space-y-4">
-                <div className="flex gap-4 items-center">
-                  <button
-                    type="button"
-                    onClick={handlePickCover}
-                    className="group relative w-24 h-24 rounded-2xl glass shrink-0 overflow-hidden flex flex-col items-center justify-center border border-dashed border-white/20 hover:border-primary/50 transition-colors"
-                    title="Choose Cover Image"
-                  >
-                    {newPlaylistCover ? (
-                      <img
-                        src={`local-image://${encodeURIComponent(newPlaylistCover)}`}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <>
-                        <Camera size={24} className="text-text/30 group-hover:text-primary transition-colors mb-1" />
-                        <span className="text-[10px] font-semibold text-text/40 group-hover:text-text">Add Cover</span>
-                      </>
-                    )}
-                  </button>
-                  <div className="flex-1 space-y-2">
-                    <div>
-                      <label className="block text-[10px] font-semibold uppercase tracking-wider text-text/40 mb-1">
-                        Playlist Name
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={newPlaylistName}
-                        onChange={(e) => setNewPlaylistName(e.target.value)}
-                        placeholder="My Awesome Playlist"
-                        className="w-full px-3.5 py-2 glass rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-text/40 mb-1.5">
-                    Description
-                  </label>
-                  <textarea
-                    value={newPlaylistDesc}
-                    onChange={(e) => setNewPlaylistDesc(e.target.value)}
-                    placeholder="Add an optional description"
-                    rows={3}
-                    className="w-full px-4 py-2.5 glass rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-                  />
-                </div>
-                <div className="flex justify-end gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewPlaylistName('');
-                      setNewPlaylistDesc('');
-                      setNewPlaylistCover(null);
-                      setShowCreateModal(false);
-                    }}
-                    className="px-4 py-2 text-sm text-text/50 hover:text-text transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-primary rounded-button text-sm font-semibold text-zinc-950 shadow-glow hover:bg-primary-hover transition-colors"
-                  >
-                    Create
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* Modals */}
+      <ImportPlaylistModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} />
 
-      <AnimatePresence>
-        {playlistToDelete && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-zinc-900 border border-white/10 p-6 rounded-2xl shadow-2xl text-center"
-            >
-              <h3 className="text-base font-bold mb-2 text-text">Delete Playlist</h3>
-              <p className="text-xs text-text/50 mb-6">
-                Are you sure you want to delete this playlist? This action cannot be undone.
-              </p>
-              <div className="flex gap-3 justify-center">
+      {/* Create Playlist Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="w-full max-w-sm bg-[#141416] border border-white/10 p-6 rounded-2xl shadow-2xl space-y-4"
+          >
+            <h3 className="text-sm font-bold text-white">Create New Playlist</h3>
+            <form onSubmit={handleCreate} className="space-y-3">
+              <div>
+                <label className="text-[11px] text-text/40 block mb-1 font-semibold">Name</label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={newPlaylistName}
+                  onChange={(e) => setNewPlaylistName(e.target.value)}
+                  placeholder="My Playlist"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-text/30 focus:outline-none focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-text/40 block mb-1 font-semibold">Description (optional)</label>
+                <input
+                  type="text"
+                  value={newPlaylistDesc}
+                  onChange={(e) => setNewPlaylistDesc(e.target.value)}
+                  placeholder="Playlist description..."
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder:text-text/30 focus:outline-none focus:border-primary"
+                />
+              </div>
+              <div>
                 <button
-                  onClick={() => setPlaylistToDelete(null)}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold text-text/60 hover:text-text hover:bg-white/5 transition-colors border border-white/5"
+                  type="button"
+                  onClick={handlePickCover}
+                  className="w-full py-2 bg-white/5 border border-white/10 hover:bg-white/10 rounded-xl text-xs text-text/60 hover:text-white transition-colors"
+                >
+                  {newPlaylistCover ? 'Cover Selected ✓' : 'Choose Cover Image'}
+                </button>
+              </div>
+              <div className="flex gap-3 justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="px-4 py-2 text-xs font-semibold text-text/50 hover:text-white transition-colors"
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={() => {
-                    deletePlaylist(playlistToDelete);
-                    setPlaylistToDelete(null);
-                  }}
-                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-red-600 text-white hover:bg-red-500 transition-colors shadow-glow"
+                  type="submit"
+                  disabled={!newPlaylistName.trim()}
+                  className="px-4 py-2 text-xs font-bold bg-primary text-zinc-950 rounded-xl hover:bg-primary-hover transition-colors disabled:opacity-40"
                 >
-                  Delete
+                  Create
                 </button>
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-      <ImportPlaylistModal
-        isOpen={showImportModal}
-        onClose={() => setShowImportModal(false)}
-      />
+            </form>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

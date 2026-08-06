@@ -155,6 +155,13 @@ export interface ElectronAPI {
     clearCache: () => Promise<{ cacheSize: number }>;
     cacheStats: () => Promise<{ size: number }>;
   };
+  // Auth & Deep Linking
+  auth: {
+    onDeepLink: (callback: (url: string) => void) => () => void;
+  };
+  shell: {
+    openExternal: (url: string) => Promise<boolean>;
+  };
   // Taskbar integration (Windows)
   taskbar: {
     setTitle: (title: string) => void;
@@ -358,6 +365,16 @@ const electronAPI: ElectronAPI = {
     updateConfig: (newConfig) => ipcRenderer.invoke('obs:updateConfig', newConfig),
     updateState: (payload, localCoverPath, remoteCoverUrl) =>
       ipcRenderer.send('obs:updateState', payload, localCoverPath, remoteCoverUrl),
+  },
+  auth: {
+    onDeepLink: (callback) => {
+      const handler = (_event: unknown, url: string) => callback(url);
+      ipcRenderer.on('auth:deep-link', handler);
+      return () => ipcRenderer.removeListener('auth:deep-link', handler);
+    },
+  },
+  shell: {
+    openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   },
   profile: {
     uploadAvatar: (filePath?: string) => ipcRenderer.invoke('profile:uploadAvatar', filePath),

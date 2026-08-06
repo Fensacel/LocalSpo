@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Search } from 'lucide-react';
+import logoImg from '@/assets/logo.png';
 
 export function MobileTopAppBar() {
   const navigate = useNavigate();
@@ -21,7 +22,7 @@ export function MobileTopAppBar() {
         ) : (
           <div className="flex items-center gap-2">
             <img
-              src="/logo.png"
+              src={logoImg}
               alt="LocalSpo"
               className="w-7 h-7 object-contain rounded-lg"
             />

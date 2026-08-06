@@ -15,8 +15,10 @@ import { NowPlayingPanel } from '@/components/NowPlayingPanel';
 import { ToastContainer } from '@/components/ToastContainer';
 import { UpdateModal } from '@/components/UpdateModal';
 import { WhatsNewModal } from '@/components/WhatsNewModal';
+import { useChatUnread } from '@/hooks/useChatUnread';
 
 export function MainLayout() {
+  useChatUnread();
   const location = useLocation();
   const currentSong = usePlayerStore((s) => s.currentSong);
   const showNowPlaying = usePlayerStore((s) => s.showNowPlaying);

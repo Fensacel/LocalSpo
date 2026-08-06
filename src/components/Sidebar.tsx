@@ -14,6 +14,8 @@ import {
 import { usePlaylistStore, useLibraryStore, useFavoritesStore, usePlayerStore } from '@/stores';
 import { getImageUrl } from '@/utils';
 
+import logoImg from '@/assets/logo.png';
+
 export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -53,7 +55,7 @@ export function Sidebar() {
           className="flex items-center gap-2.5 cursor-pointer group"
         >
           <img
-            src="/logo.png"
+            src={logoImg}
             alt="LocalSpo"
             className="w-7 h-7 object-contain rounded-lg drop-shadow-md group-hover:scale-105 transition-transform"
           />
