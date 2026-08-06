@@ -1,0 +1,401 @@
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import {
+  Edit3,
+  CheckCircle,
+  Users,
+  Music,
+  ListMusic,
+  Clock,
+  Globe,
+  Calendar,
+  Camera,
+  Save,
+  X,
+  Disc3,
+  Flame,
+  Tag,
+} from 'lucide-react';
+import { useProfileStore } from '@/stores/useProfileStore';
+import { useStatsStore } from '@/stores/useStatsStore';
+import { usePlaylistStore } from '@/stores';
+import { SafeAvatar, SafeBanner, SafeImage } from '@/components/SafeImage';
+
+function StatCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
+  return (
+    <div className="bg-[#151518] rounded-xl p-4 flex flex-col gap-1 border border-white/5 shadow-md">
+      <div className="text-[#8B90A0] text-xs flex items-center gap-1.5 font-mono">{icon}{label}</div>
+      <div className="text-white font-bold text-lg">{value}</div>
+    </div>
+  );
+}
+
+export function ProfilePage() {
+  const { username } = useParams<{ username: string }>();
+  const navigate = useNavigate();
+  const { profile, loadProfile, saveProfile, updateAvatar, updateBanner } = useProfileStore();
+  const stats = useStatsStore();
+  const { playlists } = usePlaylistStore();
+  const [isEditing, setIsEditing] = useState(false);
+
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+
+  const [editForm, setEditForm] = useState({
+    displayName: '',
+    username: '',
+    bio: '',
+    country: '',
+    favoriteGenres: [] as string[],
+  });
+
+  useEffect(() => {
+    loadProfile();
+    stats.loadStats();
+  }, []);
+
+  useEffect(() => {
+    if (profile) {
+      setEditForm({
+        displayName: profile.displayName,
+        username: profile.username,
+        bio: profile.bio,
+        country: profile.country,
+        favoriteGenres: profile.favoriteGenres,
+      });
+    }
+  }, [profile]);
+
+  const isOwnProfile = !username || username === profile?.username || username === 'me';
+
+  const handleSave = async () => {
+    if (avatarPreview) {
+      await updateAvatar(avatarPreview);
+      setAvatarPreview(null);
+    }
+    if (bannerPreview) {
+      await updateBanner(bannerPreview);
+      setBannerPreview(null);
+    }
+    await saveProfile(editForm);
+    setIsEditing(false);
+  };
+
+  const handleAvatarSelect = async () => {
+    if (!isOwnProfile || !isEditing) return;
+    try {
+      if (window.electronAPI?.profile?.uploadAvatar) {
+        const file = await window.electronAPI.dialog.openFile({
+          filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+        });
+        if (file) {
+          const relPath = await window.electronAPI.profile.uploadAvatar(file);
+          if (relPath) await updateAvatar(relPath);
+        }
+      }
+    } catch {}
+  };
+
+  const handleBannerSelect = async () => {
+    if (!isOwnProfile || !isEditing) return;
+    try {
+      if (window.electronAPI?.profile?.uploadBanner) {
+        const file = await window.electronAPI.dialog.openFile({
+          filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+        });
+        if (file) {
+          const relPath = await window.electronAPI.profile.uploadBanner(file);
+          if (relPath) await updateBanner(relPath);
+        }
+      }
+    } catch {}
+  };
+
+  const topSongs = stats.getTopSongs(5);
+  const topArtists = stats.getTopArtists(5);
+  const topAlbums = stats.getTopAlbums(5);
+  const recentlyPlayed = stats.getRecentlyPlayed(10);
+  const publicPlaylists = playlists.filter((pl) =>
+    profile?.publicPlaylistIds.includes(pl.id) || isOwnProfile,
+  );
+
+  if (!profile) {
+    return (
+      <div className="flex items-center justify-center h-64 text-[#8B90A0]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#0070F3]" />
+      </div>
+    );
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-4xl mx-auto space-y-8 select-none pb-12"
+    >
+      {/* ── Banner ──────────────────────────────────────────────── */}
+      <div
+        className={`relative h-44 md:h-60 rounded-2xl overflow-hidden border border-white/5 ${isEditing && isOwnProfile ? 'cursor-pointer group' : ''}`}
+        onClick={handleBannerSelect}
+      >
+        <SafeBanner src={bannerPreview || profile.bannerUrl}>
+          {isEditing && isOwnProfile && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-90 group-hover:opacity-100 transition-opacity">
+              <Camera size={24} className="text-white" />
+              <span className="text-white text-xs font-semibold ml-2">Change Banner (PNG/JPG/WEBP)</span>
+            </div>
+          )}
+        </SafeBanner>
+      </div>
+
+      {/* ── Avatar + Name row ──────────────────────────────────── */}
+      <div className="flex flex-col md:flex-row items-start md:items-end gap-4 -mt-14 md:-mt-20 px-2 md:px-4">
+        {/* Avatar */}
+        <div
+          className={`relative w-28 h-28 md:w-36 md:h-36 rounded-full border-4 border-[#0B0B0D] overflow-hidden bg-gradient-to-br from-[#0070F3] to-purple-700 shrink-0 ${isEditing && isOwnProfile ? 'cursor-pointer group' : ''}`}
+          onClick={handleAvatarSelect}
+        >
+          <SafeAvatar src={avatarPreview || profile.avatarUrl} alt="Avatar" sizeClassName="w-full h-full" />
+          {isEditing && isOwnProfile && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-90 group-hover:opacity-100 transition-opacity">
+              <Camera size={22} className="text-white" />
+            </div>
+          )}
+        </div>
+
+        {/* Name/username */}
+        <div className="flex-1 pb-2">
+          {isEditing ? (
+            <div className="space-y-2">
+              <input
+                value={editForm.displayName}
+                onChange={(e) => setEditForm((f) => ({ ...f, displayName: e.target.value }))}
+                className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white text-xl font-bold w-full focus:outline-none focus:border-[#0070F3]"
+                placeholder="Display Name"
+              />
+              <input
+                value={editForm.username}
+                onChange={(e) => setEditForm((f) => ({ ...f, username: e.target.value.replace(/\s/g, '') }))}
+                className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[#8B90A0] text-sm w-full focus:outline-none focus:border-[#0070F3]"
+                placeholder="@username"
+              />
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl md:text-3xl font-bold text-white">{profile.displayName}</h1>
+                {profile.isVerified && <CheckCircle size={20} className="text-[#0070F3] fill-[#0070F3]" />}
+              </div>
+              <p className="text-[#8B90A0] text-sm font-mono">@{profile.username}</p>
+              <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-[#8B90A0] font-mono">
+                <span className="flex items-center gap-1"><Users size={12} />{profile.followersCount} followers</span>
+                <span className="flex items-center gap-1"><Users size={12} />{profile.followingCount} following</span>
+                <span className="flex items-center gap-1">
+                  <Calendar size={12} />Joined {new Date(profile.joinDate).toLocaleDateString()}
+                </span>
+                {profile.country && <span className="flex items-center gap-1"><Globe size={12} />{profile.country}</span>}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Edit / Save actions */}
+        {isOwnProfile && (
+          <div className="flex gap-2 pb-2">
+            {isEditing ? (
+              <>
+                <button
+                  onClick={handleSave}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0070F3] text-white text-sm font-semibold hover:bg-[#0070F3]/80 transition-all cursor-pointer shadow-glow"
+                >
+                  <Save size={14} /> Save
+                </button>
+                <button
+                  onClick={() => setIsEditing(false)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 text-[#9CA3AF] text-sm hover:bg-white/10 transition-all cursor-pointer"
+                >
+                  <X size={14} />
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 transition-all cursor-pointer"
+              >
+                <Edit3 size={14} /> Edit Profile
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Bio display */}
+      {!isEditing && profile.bio && (
+        <p className="text-[#9CA3AF] text-sm px-2 leading-relaxed">{profile.bio}</p>
+      )}
+
+      {/* ── Listening Stats ─────────────────────────────────────────────── */}
+      <section className="space-y-3">
+        <h2 className="text-xs font-bold tracking-widest text-[#8B90A0] uppercase font-mono px-1">Listening Overview</h2>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <StatCard label="Today" value={stats.getTodayHours()} icon={<Clock size={12} />} />
+          <StatCard label="This Week" value={stats.getWeekHours()} icon={<Clock size={12} />} />
+          <StatCard label="This Month" value={stats.getMonthHours()} icon={<Clock size={12} />} />
+          <StatCard label="Lifetime" value={stats.getLifetimeHours()} icon={<Clock size={12} />} />
+          <StatCard label="Streak" value={`🔥 ${stats.getListeningStreak()} Days`} icon={<Flame size={12} className="text-amber-400" />} />
+        </div>
+      </section>
+
+      {/* ── Top Songs (with artwork) ───────────────────────────────────────── */}
+      {topSongs.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-xs font-bold tracking-widest text-[#8B90A0] uppercase font-mono px-1 flex items-center gap-2">
+            <Music size={13} className="text-[#0070F3]" /> Top Songs
+          </h2>
+          <div className="space-y-1.5">
+            {topSongs.map((s: any, i: number) => (
+              <div key={s.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-[#151518] border border-white/5 hover:bg-[#1C1B1B] transition-all">
+                <span className="text-[#8B90A0] text-xs w-4 text-right font-mono">{i + 1}</span>
+                <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/5 shrink-0 overflow-hidden">
+                  <SafeImage src={s.coverPath} alt="" className="w-full h-full object-cover" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-white truncate">{s.title}</p>
+                  <p className="text-[10px] font-mono text-[#8B90A0] truncate mt-0.5">{s.artist}</p>
+                </div>
+                <div className="text-xs text-white font-mono font-bold px-2">{s.count}×</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Top Artists & Top Albums Cards (with artwork) ────────────────────── */}
+      <div className="grid md:grid-cols-2 gap-6">
+        {topArtists.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="text-xs font-bold tracking-widest text-[#8B90A0] uppercase font-mono px-1 flex items-center gap-2">
+              <Disc3 size={13} className="text-purple-400" /> Favorite Artists
+            </h2>
+            <div className="space-y-2">
+              {topArtists.map((a: any) => (
+                <div key={a.name} className="flex items-center gap-3 bg-[#151518] rounded-xl p-2.5 border border-white/5">
+                  <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 border border-white/10">
+                    <SafeAvatar src={a.coverPath} alt={a.name} sizeClassName="w-full h-full" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-white truncate">{a.name}</p>
+                    <p className="text-[10px] font-mono text-[#8B90A0]">{a.count} plays</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {topAlbums.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="text-xs font-bold tracking-widest text-[#8B90A0] uppercase font-mono px-1 flex items-center gap-2">
+              <ListMusic size={13} className="text-emerald-400" /> Favorite Albums
+            </h2>
+            <div className="space-y-2">
+              {topAlbums.map((a: any) => (
+                <div key={a.name} className="flex items-center gap-3 bg-[#151518] rounded-xl p-2.5 border border-white/5">
+                  <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 border border-white/10">
+                    <SafeImage src={a.coverPath} alt={a.name} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-white truncate">{a.name}</p>
+                    <p className="text-[10px] font-mono text-[#8B90A0]">{a.count} plays</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
+
+      {/* ── Favorite Playlists (with artwork) ────────────────────────────── */}
+      {publicPlaylists.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-xs font-bold tracking-widest text-[#8B90A0] uppercase font-mono px-1 flex items-center gap-2">
+            <ListMusic size={13} className="text-[#0070F3]" /> Playlists
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {publicPlaylists.map((pl) => (
+              <div
+                key={pl.id}
+                onClick={() => navigate(`/playlists/${pl.id}`)}
+                className="flex items-center gap-3 bg-[#151518] rounded-xl p-3 border border-white/5 cursor-pointer hover:bg-[#1C1B1B] transition-all"
+              >
+                <div className="w-10 h-10 rounded-lg bg-white/5 shrink-0 overflow-hidden flex items-center justify-center border border-white/5">
+                  <SafeImage src={pl.coverPath} alt={pl.name} className="w-full h-full object-cover" fallback={<ListMusic size={18} className="text-[#8B90A0]" />} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-white truncate">{pl.name}</p>
+                  <p className="text-[10px] font-mono text-[#8B90A0]">{pl.songIds.length} tracks</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Recently Played (with cover artwork) ───────────────────────── */}
+      {recentlyPlayed.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-xs font-bold tracking-widest text-[#8B90A0] uppercase font-mono px-1 flex items-center gap-2">
+            <Clock size={13} className="text-[#0070F3]" /> Recently Played
+          </h2>
+          <div className="space-y-1.5">
+            {recentlyPlayed.map((p: any, i: number) => (
+              <div key={`${p.songId}-${i}`} className="flex items-center gap-3 p-2.5 rounded-xl bg-[#151518] border border-white/5 hover:bg-[#1C1B1B] transition-all">
+                <div className="w-9 h-9 rounded-lg bg-white/5 shrink-0 overflow-hidden border border-white/5">
+                  <SafeImage src={p.coverPath} alt="" className="w-full h-full object-cover" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-white truncate">{p.title}</p>
+                  <p className="text-[10px] font-mono text-[#8B90A0] truncate mt-0.5">{p.artist}</p>
+                </div>
+                <span className="text-[10px] text-[#8B90A0] font-mono whitespace-nowrap">
+                  {new Date(p.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Favorite Genres (with Genre Icon) ──────────────────────────────── */}
+      {(profile.favoriteGenres.length > 0 || isEditing) && (
+        <section className="space-y-3 pb-4">
+          <h2 className="text-xs font-bold tracking-widest text-[#8B90A0] uppercase font-mono px-1 flex items-center gap-2">
+            <Tag size={13} className="text-[#0070F3]" /> Favorite Genres
+          </h2>
+          {isEditing ? (
+            <input
+              value={editForm.favoriteGenres.join(', ')}
+              onChange={(e) =>
+                setEditForm((f) => ({
+                  ...f,
+                  favoriteGenres: e.target.value.split(',').map((g) => g.trim()).filter(Boolean),
+                }))
+              }
+              placeholder="Pop, Rock, Jazz, Classical..."
+              className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-sm text-white w-full focus:outline-none focus:border-[#0070F3]"
+            />
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {profile.favoriteGenres.map((g) => (
+                <span key={g} className="px-3 py-1.5 rounded-full bg-[#0070F3]/15 border border-[#0070F3]/30 text-xs text-[#0070F3] font-semibold font-mono flex items-center gap-1.5">
+                  <Tag size={11} /> {g}
+                </span>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+    </motion.div>
+  );
+}

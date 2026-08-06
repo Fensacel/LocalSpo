@@ -150,7 +150,7 @@ export function OBSOverlaySection() {
               /compact (Minimal)
             </button>
             <button onClick={() => copyUrl(status.localUrl + '/lyrics')} className="hover:text-sky-400 font-mono">
-              /lyrics (Synced Karaoke)
+              /lyrics (Synced Lyrics)
             </button>
             <button onClick={() => copyUrl(status.localUrl + '/json')} className="hover:text-sky-400 font-mono">
               /json (API)

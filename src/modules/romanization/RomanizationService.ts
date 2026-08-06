@@ -48,7 +48,7 @@ export class RomanizationService {
           break;
       }
 
-      // Sync word-level timestamps for Karaoke mode if words exist
+      // Sync word-level timestamps if words exist
       let romanizedWords = line.words;
       if (line.words && line.words.length > 0 && romanizedText !== line.text) {
         const romTokens = romanizedText.split(/\s+/).filter(t => t.length > 0);

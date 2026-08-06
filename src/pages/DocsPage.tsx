@@ -28,7 +28,7 @@ export function DocsPage() {
         </div>
         <h1 className="text-4xl font-extrabold text-text tracking-tight">Features & Documentation</h1>
         <p className="text-base text-text/50 max-w-2xl">
-          Discover all native capabilities built into Localspo — from ad-free online streaming to Spotify downloading, ID3 tag editing, and synced karaoke lyrics.
+          Discover all native capabilities built into Localspo — from ad-free online streaming to Spotify downloading, ID3 tag editing, and synced lyrics.
         </p>
       </motion.div>
 
@@ -172,12 +172,12 @@ export function DocsPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          {/* Synced Karaoke */}
+          {/* Synced Lyrics */}
           <div className="glass p-6 rounded-2xl border border-white/5 space-y-3 hover:border-primary/30 transition-all duration-300">
             <div className="w-10 h-10 rounded-xl bg-primary/15 border border-primary/20 flex items-center justify-center text-primary">
               <Mic2 size={20} />
             </div>
-            <h3 className="text-lg font-bold text-text">Synced Karaoke LRC Engine</h3>
+            <h3 className="text-lg font-bold text-text">Synced Lyrics LRC Engine</h3>
             <p className="text-sm text-text/60 leading-relaxed">
               Supports both standard LRC and Enhanced LRC files. Words highlight smoothly in sync with track playback.
             </p>

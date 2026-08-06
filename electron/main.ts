@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, protocol, net } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { registerScannerIpc } from './scanner';
 import { registerDownloaderIpc } from './ipc/downloaderIpc';
@@ -42,48 +43,146 @@ const ELECTRON_DIST = path.join(__dirname);
 const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 
 function getDataPath(): string {
-  const dataPath = path.join(app.getPath('userData'), 'localspo');
+  const dataPath = path.join(app.getPath('userData'), 'LocalSpo');
   if (!fs.existsSync(dataPath)) {
     fs.mkdirSync(dataPath, { recursive: true });
   }
   return dataPath;
 }
 
-function ensureDataFiles(): void {
-  const dataPath = getDataPath();
-  const files = ['library.json', 'history.json', 'favorites.json', 'playlist.json', 'settings.json', 'cache.json'];
-
-  for (const file of files) {
-    const filePath = path.join(dataPath, file);
-    if (!fs.existsSync(filePath)) {
-      const defaultData = file === 'settings.json'
-        ? JSON.stringify({ musicFolders: [], theme: 'calm-monochrome', accentColor: '#FFFFFF', gapless: true, crossfade: false, crossfadeDuration: 3, visualizer: 'spectrum', lyricsEnabled: true, seekByLyricsEnabled: true, equalizerPreset: 'flat', equalizerBands: [0,0,0,0,0,0,0,0,0,0] }, null, 2)
-        : file === 'library.json'
-        ? JSON.stringify({ songs: [], albums: [], artists: [], lastScan: null }, null, 2)
-        : file === 'playlist.json'
-        ? JSON.stringify({ playlists: [] }, null, 2)
-        : file === 'favorites.json'
-        ? JSON.stringify({ songIds: [], albumIds: [], artistIds: [] }, null, 2)
-        : file === 'history.json'
-        ? JSON.stringify({ entries: [] }, null, 2)
-        : JSON.stringify({}, null, 2);
-      fs.writeFileSync(filePath, defaultData, 'utf-8');
-    }
-  }
-
-  const cacheDirs = ['cover', 'lyrics', 'waveform', 'stream'];
-  for (const dir of cacheDirs) {
-    const dirPath = path.join(dataPath, 'cache', dir);
-    if (!fs.existsSync(dirPath)) {
-      fs.mkdirSync(dirPath, { recursive: true });
+function ensureDirectories(): void {
+  const root = getDataPath();
+  const dirs = [
+    path.join(root, 'config'),
+    path.join(root, 'profile'),
+    path.join(root, 'cache', 'covers'),
+    path.join(root, 'cache', 'avatars'),
+    path.join(root, 'cache', 'banners'),
+    path.join(root, 'cache', 'lyrics'),
+    path.join(root, 'cache', 'downloads'),
+    path.join(root, 'cache', 'temp'),
+    path.join(root, 'cache', 'logs'),
+  ];
+  for (const dir of dirs) {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
     }
   }
 }
 
+function normalizeDataFileName(fileName: string): string {
+  const base = path.basename(fileName);
+  if (base === 'playlist.json') return 'playlists.json';
+  return base;
+}
+
+function getConfigFilePath(fileName: string): string {
+  const safeName = normalizeDataFileName(fileName);
+  return path.join(getDataPath(), 'config', safeName);
+}
+
+function migrateLegacyData(): void {
+  ensureDirectories();
+  const root = getDataPath();
+  const legacyRoot = path.join(app.getPath('userData'), 'localspo');
+  const legacyRoots = [root, legacyRoot];
+
+  const fileMappings: Record<string, string> = {
+    'profile.json': 'profile.json',
+    'settings.json': 'settings.json',
+    'library.json': 'library.json',
+    'playlist.json': 'playlists.json',
+    'playlists.json': 'playlists.json',
+    'queue.json': 'queue.json',
+    'history.json': 'history.json',
+    'stats.json': 'stats.json',
+    'downloads.json': 'downloads.json',
+    'favorites.json': 'favorites.json',
+  };
+
+  for (const dir of legacyRoots) {
+    if (!fs.existsSync(dir)) continue;
+    for (const [oldName, newName] of Object.entries(fileMappings)) {
+      const srcPath = path.join(dir, oldName);
+      const destPath = path.join(root, 'config', newName);
+      if (fs.existsSync(srcPath) && !fs.existsSync(destPath) && srcPath !== destPath) {
+        try {
+          fs.copyFileSync(srcPath, destPath);
+        } catch (err) {
+          console.error(`[Migration] Failed copying ${srcPath} to ${destPath}:`, err);
+        }
+      }
+    }
+  }
+
+  // Ensure default files exist in config/
+  const configDir = path.join(root, 'config');
+  const defaultFiles: Record<string, string> = {
+    'profile.json': JSON.stringify({ profile: null }, null, 2),
+    'settings.json': JSON.stringify({ musicFolders: [], theme: 'calm-monochrome', accentColor: '#FFFFFF', gapless: true, crossfade: false, crossfadeDuration: 3, visualizer: 'spectrum', lyricsEnabled: true, seekByLyricsEnabled: true, equalizerPreset: 'flat', equalizerBands: [0,0,0,0,0,0,0,0,0,0], windowBounds: { width: 1440, height: 900, isMaximized: false } }, null, 2),
+    'library.json': JSON.stringify({ songs: [], albums: [], artists: [], lastScan: null }, null, 2),
+    'playlists.json': JSON.stringify({ playlists: [] }, null, 2),
+    'queue.json': JSON.stringify({ queue: [], queueIndex: -1, currentSong: null, currentTime: 0, volume: 0.8, isMuted: false, repeatMode: 'off', shuffleMode: 'off', sourceName: null }, null, 2),
+    'history.json': JSON.stringify({ entries: [] }, null, 2),
+    'stats.json': JSON.stringify({ plays: [], totalListeningSeconds: 0, streak: 0 }, null, 2),
+    'downloads.json': JSON.stringify({ downloads: [] }, null, 2),
+    'favorites.json': JSON.stringify({ songIds: [], albumIds: [], artistIds: [] }, null, 2),
+  };
+
+  for (const [filename, defaultData] of Object.entries(defaultFiles)) {
+    const target = path.join(configDir, filename);
+    if (!fs.existsSync(target)) {
+      fs.writeFileSync(target, defaultData, 'utf-8');
+    }
+  }
+}
+
+let saveBoundsTimeout: NodeJS.Timeout | null = null;
+function saveWindowBounds() {
+  if (!mainWindow) return;
+  if (saveBoundsTimeout) clearTimeout(saveBoundsTimeout);
+  saveBoundsTimeout = setTimeout(() => {
+    try {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      const bounds = mainWindow.getBounds();
+      const isMaximized = mainWindow.isMaximized();
+      const settingsFile = getConfigFilePath('settings.json');
+      let current: any = {};
+      if (fs.existsSync(settingsFile)) {
+        try { current = JSON.parse(fs.readFileSync(settingsFile, 'utf-8')); } catch {}
+      }
+      current.windowBounds = { ...bounds, isMaximized };
+      fs.writeFileSync(settingsFile, JSON.stringify(current, null, 2), 'utf-8');
+    } catch {}
+  }, 1000);
+}
+
 function createWindow(): void {
+  let width = 1440;
+  let height = 900;
+  let x: number | undefined;
+  let y: number | undefined;
+  let shouldMaximize = false;
+
+  try {
+    const settingsFile = getConfigFilePath('settings.json');
+    if (fs.existsSync(settingsFile)) {
+      const data = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
+      if (data.windowBounds) {
+        width = data.windowBounds.width || 1440;
+        height = data.windowBounds.height || 900;
+        if (data.windowBounds.x !== undefined) x = data.windowBounds.x;
+        if (data.windowBounds.y !== undefined) y = data.windowBounds.y;
+        shouldMaximize = !!data.windowBounds.isMaximized;
+      }
+    }
+  } catch {}
+
   mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    width,
+    height,
+    x,
+    y,
     minWidth: 1024,
     minHeight: 700,
     frame: false,
@@ -98,12 +197,20 @@ function createWindow(): void {
       sandbox: false,
       webSecurity: true,
     },
-    icon: path.join(DIST, 'logo.png'),
+    icon: app.isPackaged
+      ? path.join(process.resourcesPath, 'app.asar', 'dist', 'icon.ico')
+      : path.join(__dirname, '../public/icon.ico'),
   });
 
   mainWindow.once('ready-to-show', () => {
+    if (shouldMaximize) {
+      mainWindow?.maximize();
+    }
     mainWindow?.show();
   });
+
+  mainWindow.on('resize', saveWindowBounds);
+  mainWindow.on('move', saveWindowBounds);
 
   if (VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(VITE_DEV_SERVER_URL);
@@ -199,19 +306,36 @@ function registerLocalProtocol(): void {
 
   protocol.handle('local-image', (request) => {
     try {
-      let filePath = '';
+      let rawPath = '';
       if (request.url.startsWith('local-image://local/')) {
-        filePath = request.url.slice('local-image://local/'.length);
+        rawPath = request.url.slice('local-image://local/'.length);
       } else if (request.url.startsWith('local-image://')) {
-        filePath = request.url.slice('local-image://'.length);
+        rawPath = request.url.slice('local-image://'.length);
       } else {
-        filePath = request.url.slice('local-image:'.length);
+        rawPath = request.url.slice('local-image:'.length);
       }
-      filePath = decodeURIComponent(filePath);
-      if (filePath.startsWith('/') && process.platform === 'win32') {
-        filePath = filePath.slice(1);
+      rawPath = rawPath.split('?')[0];
+      let filePath = decodeURIComponent(rawPath);
+
+      if (process.platform === 'win32') {
+        if (filePath.startsWith('/') && !filePath.startsWith('//')) {
+          filePath = filePath.slice(1);
+        }
+        if (/^[a-zA-Z]\//.test(filePath)) {
+          filePath = filePath[0] + ':' + filePath.slice(1);
+        }
       }
-      const resolvedPath = path.resolve(filePath);
+
+      let resolvedPath = path.resolve(filePath);
+      if (!fs.existsSync(resolvedPath)) {
+        const dataRelative = path.join(getDataPath(), filePath);
+        if (fs.existsSync(dataRelative)) {
+          resolvedPath = dataRelative;
+        } else {
+          return new Response('Image not found', { status: 404 });
+        }
+      }
+
       const fileUrl = pathToFileURL(resolvedPath).toString();
       return net.fetch(fileUrl, { bypassCustomProtocolHandlers: true });
     } catch (err) {
@@ -302,6 +426,24 @@ function registerIpcHandlers(): void {
     return result.canceled ? null : result.filePaths[0];
   });
 
+  ipcMain.handle('dialog:openFile', async (_event, options?: { filters?: Array<{ name: string; extensions: string[] }> }) => {
+    const result = await dialog.showOpenDialog(mainWindow!, {
+      properties: ['openFile'],
+      title: 'Select File',
+      filters: options?.filters || [{ name: 'All Files', extensions: ['*'] }],
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    const src = result.filePaths[0];
+    // Copy to app data to ensure persistent access
+    const ext = path.extname(src);
+    const destDir = path.join(getDataPath(), 'covers');
+    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+    const destName = `upload_${Date.now()}_${Math.random().toString(36).slice(2, 7)}${ext}`;
+    const destPath = path.join(destDir, destName);
+    fs.copyFileSync(src, destPath);
+    return destPath.replace(/\\/g, '/');
+  });
+
   ipcMain.handle('dialog:openImage', async () => {
     const result = await dialog.showOpenDialog(mainWindow!, {
       properties: ['openFile'],
@@ -360,9 +502,16 @@ function registerIpcHandlers(): void {
   // Data persistence
   ipcMain.handle('data:read', async (_event, fileName: string) => {
     try {
-      const safeFileName = path.basename(fileName);
-      const filePath = path.join(getDataPath(), safeFileName);
-      if (!fs.existsSync(filePath)) return null;
+      const filePath = getConfigFilePath(fileName);
+      if (!fs.existsSync(filePath)) {
+        // Fallback check in root dataPath if migration didn't move it
+        const fallbackPath = path.join(getDataPath(), path.basename(fileName));
+        if (fs.existsSync(fallbackPath)) {
+          const content = fs.readFileSync(fallbackPath, 'utf-8');
+          return JSON.parse(content);
+        }
+        return null;
+      }
       const content = fs.readFileSync(filePath, 'utf-8');
       return JSON.parse(content);
     } catch (err) {
@@ -373,17 +522,104 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('data:write', async (_event, fileName: string, data: unknown) => {
     try {
-      const dataPath = getDataPath();
-      if (!fs.existsSync(dataPath)) {
-        fs.mkdirSync(dataPath, { recursive: true });
+      const filePath = getConfigFilePath(fileName);
+      const dir = path.dirname(filePath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
       }
-      const safeFileName = path.basename(fileName);
-      const filePath = path.join(dataPath, safeFileName);
       fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
       return true;
     } catch (err) {
       console.error(`Error writing data file ${fileName}:`, err);
       return false;
+    }
+  });
+
+  // Profile Upload Handlers
+  ipcMain.handle('cache:image', async (_event, url?: string) => {
+    if (!url || typeof url !== 'string') return null;
+    const cleanUrl = url.trim();
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+      return cleanUrl;
+    }
+
+    try {
+      const hash = crypto.createHash('sha256').update(cleanUrl).digest('hex');
+      const extMatch = cleanUrl.match(/\.(png|jpg|jpeg|webp|gif|svg)($|\?)/i);
+      const ext = extMatch ? `.${extMatch[1]}` : '.png';
+      const filename = `${hash}${ext}`;
+
+      const coversDir = path.join(getDataPath(), 'cache', 'covers');
+      if (!fs.existsSync(coversDir)) {
+        fs.mkdirSync(coversDir, { recursive: true });
+      }
+
+      const filePath = path.join(coversDir, filename);
+      const relativePath = `cache/covers/${filename}`;
+
+      if (fs.existsSync(filePath) && fs.statSync(filePath).size > 0) {
+        return `local-image://${relativePath}`;
+      }
+
+      const response = await fetch(cleanUrl);
+      if (!response.ok) return cleanUrl;
+
+      const arrayBuffer = await response.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      fs.writeFileSync(filePath, buffer);
+
+      return `local-image://${relativePath}`;
+    } catch (err) {
+      console.error('Error caching artwork image:', err);
+      return cleanUrl;
+    }
+  });
+
+  ipcMain.handle('profile:uploadAvatar', async (_event, filePath?: string) => {
+    try {
+      let srcPath = filePath;
+      if (!srcPath) {
+        const result = await dialog.showOpenDialog(mainWindow!, {
+          properties: ['openFile'],
+          title: 'Select Avatar Image',
+          filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+        });
+        if (result.canceled || result.filePaths.length === 0) return null;
+        srcPath = result.filePaths[0];
+      }
+      const ext = path.extname(srcPath) || '.png';
+      const profileDir = path.join(getDataPath(), 'profile');
+      if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
+      const destPath = path.join(profileDir, `avatar${ext}`);
+      fs.copyFileSync(srcPath, destPath);
+      return `profile/avatar${ext}`.replace(/\\/g, '/');
+    } catch (err) {
+      console.error('[profile:uploadAvatar] Error:', err);
+      return null;
+    }
+  });
+
+  ipcMain.handle('profile:uploadBanner', async (_event, filePath?: string) => {
+    try {
+      let srcPath = filePath;
+      if (!srcPath) {
+        const result = await dialog.showOpenDialog(mainWindow!, {
+          properties: ['openFile'],
+          title: 'Select Banner Image',
+          filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
+        });
+        if (result.canceled || result.filePaths.length === 0) return null;
+        srcPath = result.filePaths[0];
+      }
+      const ext = path.extname(srcPath) || '.png';
+      const profileDir = path.join(getDataPath(), 'profile');
+      if (!fs.existsSync(profileDir)) fs.mkdirSync(profileDir, { recursive: true });
+      const destPath = path.join(profileDir, `banner${ext}`);
+      fs.copyFileSync(srcPath, destPath);
+      return `profile/banner${ext}`.replace(/\\/g, '/');
+    } catch (err) {
+      console.error('[profile:uploadBanner] Error:', err);
+      return null;
     }
   });
 
@@ -438,18 +674,20 @@ function registerIpcHandlers(): void {
 }
 
 import { registerOBSIpc } from './ipc/obsIpc';
+import { registerTaskbarIpc } from './ipc/taskbarIpc';
 
 // ─── App Lifecycle ──────────────────────────────────────
 
 app.whenReady().then(() => {
   registerLocalProtocol();
-  ensureDataFiles();
+  migrateLegacyData();
   registerIpcHandlers();
   registerScannerIpc(getDataPath);
   const downloaderService = registerDownloaderIpc(getDataPath);
   registerPlaylistSyncIpc(getDataPath, downloaderService);
   registerStreamingIpc(getDataPath, () => mainWindow);
   registerOBSIpc(getDataPath);
+  registerTaskbarIpc(() => mainWindow);
   setupAutoUpdater();
   createWindow();
 

@@ -3,7 +3,6 @@ import { useLibraryStore, usePlayerStore, usePlaylistStore, useHistoryStore, use
 import { Play, Pause, Music, ListPlus, Sparkles, RefreshCw, Plus, ListMusic, Heart } from 'lucide-react';
 import { SongContextMenu } from '@/components/SongContextMenu';
 import { ImportPlaylistModal } from '@/components/ImportPlaylistModal';
-import { SearchBar } from '@/components/SearchBar';
 import type { Song } from '@/types';
 
 import { useNavigate } from 'react-router-dom';
@@ -310,18 +309,6 @@ export function HomePage() {
 
   return (
     <div className="space-y-8 pb-12 select-none">
-      {/* Search Bar & Import Playlist Header Row */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <SearchBar />
-
-        <button
-          onClick={() => setShowImportModal(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0070F3]/15 hover:bg-[#0070F3]/25 border border-[#0070F3]/40 rounded-md text-xs font-mono font-bold text-[#0070F3] transition-all cursor-pointer shadow-glow shrink-0"
-        >
-          <Plus size={14} />
-          Import Playlist
-        </button>
-      </div>
 
       {/* ── DYNAMIC HERO BANNER ─────────────────────────────────── */}
       <div className="relative rounded-2xl overflow-hidden bg-[#151518] border border-white/10 shadow-2xl min-h-[300px] flex flex-col justify-end p-6 md:p-8">

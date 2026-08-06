@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { usePlayerStore, useHistoryStore, useStreamingStore, useToastStore } from '@/stores';
+import { useStatsStore } from '@/stores/useStatsStore';
 import { getAudioUrl } from '@/utils';
 
 /**
@@ -96,6 +97,51 @@ export function AudioEngine() {
       navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
     }
   }, [isPlaying]);
+
+  // ── Realtime active listening tracker & play count trigger (Requirements 11 & 13) ──
+  const activePlayedSecondsRef = useRef<number>(0);
+  const hasCountedCurrentSongRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    activePlayedSecondsRef.current = 0;
+    hasCountedCurrentSongRef.current = false;
+  }, [currentSong?.id]);
+
+  useEffect(() => {
+    if (!currentSong || !isPlaying) return;
+
+    const timer = setInterval(() => {
+      const audio = audioRef.current;
+      if (!audio || audio.paused || audio.seeking || audio.readyState < 3) return;
+
+      activePlayedSecondsRef.current += 1;
+      const trackDuration = audio.duration || currentSong.duration || 0;
+      const playedSecs = activePlayedSecondsRef.current;
+
+      // Trigger play count record when 30s reached OR 50% duration reached
+      if (
+        !hasCountedCurrentSongRef.current &&
+        (playedSecs >= 30 || (trackDuration > 0 && playedSecs >= trackDuration * 0.5))
+      ) {
+        hasCountedCurrentSongRef.current = true;
+        try {
+          useStatsStore.getState().recordPlay({
+            songId: currentSong.id,
+            title: currentSong.title || 'Unknown',
+            artist: currentSong.artist || '',
+            album: currentSong.album || '',
+            coverPath: currentSong.coverPath || (currentSong as any).remoteCoverUrl || (currentSong as any).coverUrl || (currentSong as any).cover || null,
+            duration: Math.max(playedSecs, Math.floor(trackDuration)),
+            timestamp: Date.now(),
+          });
+        } catch (e) {
+          console.warn('[AudioEngine] recordPlay failed:', e);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [currentSong, isPlaying]);
 
   // ── Sleep Timer countdown monitor ───────────────────────
   const sleepTimerOption = usePlayerStore((s) => s.sleepTimerOption);
@@ -488,6 +534,24 @@ export function AudioEngine() {
       if (audio.duration > 0 && audio.currentTime < audio.duration - 1.5) {
         console.log('[AudioEngine Event] ended event ignored because current time is far from duration.');
         return;
+      }
+
+      // Record play in stats store
+      try {
+        const song = usePlayerStore.getState().currentSong;
+        if (song) {
+          useStatsStore.getState().recordPlay({
+            songId: song.id,
+            title: song.title || 'Unknown',
+            artist: (song as any).artist || '',
+            album: (song as any).album || '',
+            coverPath: song.coverPath || (song as any).remoteCoverUrl || (song as any).coverUrl || (song as any).cover || null,
+            duration: Math.floor(audio.duration || 0),
+            timestamp: Date.now(),
+          });
+        }
+      } catch (e) {
+        console.warn('[AudioEngine] recordPlay failed:', e);
       }
 
       console.log('[AudioEngine Event] Song ended. Triggering playNext...');

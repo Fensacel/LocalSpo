@@ -9,6 +9,7 @@ import { useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { SongContextMenu } from '@/components/SongContextMenu';
 import { EditSongModal } from '@/components/EditSongModal';
 import { SongDetailsModal } from '@/components/SongDetailsModal';
+import { SafeImage } from '@/components/SafeImage';
 
 export function PlaylistDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -678,29 +679,16 @@ export function PlaylistDetailPage() {
         ) : recommendedSongsList.length > 0 ? (
           <div className="space-y-1">
             {recommendedSongsList.map((song) => {
-              const songCover = song.coverPath
-                ? getImageUrl(song.coverPath)
-                : (song as any).coverUrl || (song as any).remoteCoverUrl || null;
+              const songCover = song.coverPath || (song as any).remoteCoverUrl || (song as any).coverUrl || null;
               return (
                 <div
                   key={song.id}
                   className="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.02] group transition-colors"
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
-                    {songCover ? (
-                      <img
-                        src={songCover}
-                        alt=""
-                        className="w-10 h-10 rounded-lg object-cover shrink-0"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/default-cover.png';
-                        }}
-                      />
-                    ) : (
-                      <div className="w-10 h-10 rounded-lg glass flex items-center justify-center shrink-0">
-                        <Music size={14} className="text-text/25" />
-                      </div>
-                    )}
+                    <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-white/5 border border-white/5">
+                      <SafeImage src={songCover} className="w-full h-full object-cover" />
+                    </div>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold truncate text-text">{song.title}</p>
                       <p className="text-xs text-text/40 truncate">{song.artist}</p>

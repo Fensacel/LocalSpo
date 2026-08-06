@@ -678,12 +678,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   loadSavedState: async () => {
     try {
       let saved: any = null;
-      const diskData = (await platformService.data.read('playerState.json')) as any;
+      const diskData = (await platformService.data.read('queue.json')) as any;
       if (diskData && typeof diskData === 'object' && diskData.currentSong) {
         saved = diskData;
       } else {
-        const raw = localStorage.getItem('localspo_saved_player_state');
-        if (raw) saved = JSON.parse(raw);
+        const fallbackDisk = (await platformService.data.read('playerState.json')) as any;
+        if (fallbackDisk && typeof fallbackDisk === 'object' && fallbackDisk.currentSong) {
+          saved = fallbackDisk;
+        } else {
+          const raw = localStorage.getItem('localspo_saved_player_state');
+          if (raw) saved = JSON.parse(raw);
+        }
       }
 
       if (saved && saved.currentSong) {
@@ -705,7 +710,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           queueIndex: typeof saved.queueIndex === 'number' ? saved.queueIndex : 0,
           currentTime: typeof saved.currentTime === 'number' ? saved.currentTime : 0,
           isPlaying: false,
-          volume: typeof saved.volume === 'number' ? saved.volume : 1,
+          volume: typeof saved.volume === 'number' ? saved.volume : 0.8,
           isMuted: !!saved.isMuted,
           repeatMode: saved.repeatMode || 'off',
           shuffleMode: saved.shuffleMode || 'off',
@@ -743,10 +748,17 @@ const savePlayerStateToStorage = (state: PlayerState) => {
         sourceName: state.sourceName,
       };
       localStorage.setItem('localspo_saved_player_state', JSON.stringify(data));
+      await platformService.data.write('queue.json', data);
       await platformService.data.write('playerState.json', data);
     } catch {}
-  }, 1000);
+  }, 1500);
 };
+
+usePlayerStore.subscribe((state) => {
+  if (state.currentSong) {
+    savePlayerStateToStorage(state);
+  }
+});
 
 usePlayerStore.subscribe((state) => {
   savePlayerStateToStorage(state);

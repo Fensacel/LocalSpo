@@ -12,11 +12,21 @@ export interface ElectronAPI {
   dialog: {
     openFolder: () => Promise<string | null>;
     openImage: () => Promise<string | null>;
+    openFile: (options?: { filters?: Array<{ name: string; extensions: string[] }> }) => Promise<string | null>;
   };
   // Data persistence
   data: {
     read: (fileName: string) => Promise<unknown>;
     write: (fileName: string, data: unknown) => Promise<boolean>;
+  };
+  // Cache
+  cache: {
+    image: (url: string) => Promise<string | null>;
+  };
+  // Profile
+  profile: {
+    uploadAvatar: (filePath?: string) => Promise<string | null>;
+    uploadBanner: (filePath?: string) => Promise<string | null>;
   };
   // App info
   app: {
@@ -145,6 +155,18 @@ export interface ElectronAPI {
     clearCache: () => Promise<{ cacheSize: number }>;
     cacheStats: () => Promise<{ size: number }>;
   };
+  // Taskbar integration (Windows)
+  taskbar: {
+    setTitle: (title: string) => void;
+    setThumbarButtons: (isPlaying: boolean, isLiked: boolean) => void;
+    setThumbnailClip: (coverSource: string | null) => Promise<boolean>;
+    setOverlayIcon: (state: 'playing' | 'paused' | 'stopped') => void;
+    onPlayPause: (callback: () => void) => () => void;
+    onNext: (callback: () => void) => () => void;
+    onPrev: (callback: () => void) => () => void;
+    onStop: (callback: () => void) => () => void;
+    onLike: (callback: () => void) => () => void;
+  };
   // OBS Overlay
   obs: {
     getStatus: () => Promise<{
@@ -172,10 +194,14 @@ const electronAPI: ElectronAPI = {
   dialog: {
     openFolder: () => ipcRenderer.invoke('dialog:openFolder'),
     openImage: () => ipcRenderer.invoke('dialog:openImage'),
+    openFile: (options) => ipcRenderer.invoke('dialog:openFile', options),
   },
   data: {
     read: (fileName) => ipcRenderer.invoke('data:read', fileName),
     write: (fileName, data) => ipcRenderer.invoke('data:write', fileName, data),
+  },
+  cache: {
+    image: (url) => ipcRenderer.invoke('cache:image', url),
   },
   app: {
     getVersion: () => ipcRenderer.invoke('app:getVersion'),
@@ -294,6 +320,37 @@ const electronAPI: ElectronAPI = {
     cacheStats: () =>
       ipcRenderer.invoke('streaming:cacheStats'),
   },
+  taskbar: {
+    setTitle: (title) => ipcRenderer.send('taskbar:setTitle', title),
+    setThumbarButtons: (isPlaying, isLiked) => ipcRenderer.send('taskbar:setThumbarButtons', isPlaying, isLiked),
+    setThumbnailClip: (coverSource) => ipcRenderer.invoke('taskbar:setThumbnailClip', coverSource),
+    setOverlayIcon: (state) => ipcRenderer.send('taskbar:setOverlayIcon', state),
+    onPlayPause: (callback) => {
+      const handler = () => callback();
+      ipcRenderer.on('taskbar:playPause', handler);
+      return () => ipcRenderer.removeListener('taskbar:playPause', handler);
+    },
+    onNext: (callback) => {
+      const handler = () => callback();
+      ipcRenderer.on('taskbar:next', handler);
+      return () => ipcRenderer.removeListener('taskbar:next', handler);
+    },
+    onPrev: (callback) => {
+      const handler = () => callback();
+      ipcRenderer.on('taskbar:prev', handler);
+      return () => ipcRenderer.removeListener('taskbar:prev', handler);
+    },
+    onStop: (callback) => {
+      const handler = () => callback();
+      ipcRenderer.on('taskbar:stop', handler);
+      return () => ipcRenderer.removeListener('taskbar:stop', handler);
+    },
+    onLike: (callback) => {
+      const handler = () => callback();
+      ipcRenderer.on('taskbar:like', handler);
+      return () => ipcRenderer.removeListener('taskbar:like', handler);
+    },
+  },
   obs: {
     getStatus: () => ipcRenderer.invoke('obs:getStatus'),
     startServer: () => ipcRenderer.invoke('obs:start'),
@@ -301,6 +358,10 @@ const electronAPI: ElectronAPI = {
     updateConfig: (newConfig) => ipcRenderer.invoke('obs:updateConfig', newConfig),
     updateState: (payload, localCoverPath, remoteCoverUrl) =>
       ipcRenderer.send('obs:updateState', payload, localCoverPath, remoteCoverUrl),
+  },
+  profile: {
+    uploadAvatar: (filePath?: string) => ipcRenderer.invoke('profile:uploadAvatar', filePath),
+    uploadBanner: (filePath?: string) => ipcRenderer.invoke('profile:uploadBanner', filePath),
   },
 };
 

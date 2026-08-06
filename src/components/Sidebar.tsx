@@ -4,15 +4,12 @@ import { motion } from 'framer-motion';
 import {
   Heart,
   ListMusic,
-  Settings,
   FolderOpen,
-  FileText,
   Download,
   Plus,
   Library,
   Folder,
   Home,
-  Search,
 } from 'lucide-react';
 import { usePlaylistStore, useLibraryStore, useFavoritesStore, usePlayerStore } from '@/stores';
 import { getImageUrl } from '@/utils';
@@ -68,57 +65,26 @@ export function Sidebar() {
 
       {/* Main Navigation Links */}
       <div className="px-3 space-y-1 py-1">
-        <button
-          type="button"
-          onClick={() => handleNav('/')}
-          className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-            location.pathname === '/'
-              ? 'bg-[#0070F3] text-white shadow-glow'
-              : 'text-[#9CA3AF] hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <Home size={17} />
-          <span>Home</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleNav('/search')}
-          className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-            location.pathname === '/search'
-              ? 'bg-[#0070F3] text-white shadow-glow'
-              : 'text-[#9CA3AF] hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <Search size={17} />
-          <span>Search</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleNav('/songs')}
-          className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-            location.pathname === '/songs'
-              ? 'bg-[#0070F3] text-white shadow-glow'
-              : 'text-[#9CA3AF] hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <Library size={17} />
-          <span>Library</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleNav('/downloads')}
-          className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-            location.pathname === '/downloads'
-              ? 'bg-[#0070F3] text-white shadow-glow'
-              : 'text-[#9CA3AF] hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <Download size={17} />
-          <span>Downloads</span>
-        </button>
+        {[
+          { path: '/', icon: <Home size={17} />, label: 'Home' },
+          { path: '/songs', icon: <Library size={17} />, label: 'Library' },
+          { path: '/downloads', icon: <Download size={17} />, label: 'Downloads' },
+          { path: '/playlists', icon: <ListMusic size={17} />, label: 'Playlists' },
+        ].map(({ path, icon, label }) => (
+          <button
+            key={path}
+            type="button"
+            onClick={() => handleNav(path)}
+            className={`w-full flex items-center gap-3 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              location.pathname === path
+                ? 'bg-[#0070F3] text-white shadow-glow'
+                : 'text-[#9CA3AF] hover:text-white hover:bg-white/5'
+            }`}
+          >
+            {icon}
+            <span>{label}</span>
+          </button>
+        ))}
       </div>
 
       {/* ── Library & Playlists Container ───────────────────────────── */}
@@ -140,36 +106,17 @@ export function Sidebar() {
 
         {/* Filter Pills */}
         <div className="flex items-center gap-1 px-3 py-1 border-b border-white/5 pb-2">
-          <button
-            onClick={() => setActiveFilter('all')}
-            className={`px-2.5 py-0.5 rounded-md text-[11px] font-mono font-medium transition-all ${
-              activeFilter === 'all'
-                ? 'bg-white/15 text-white'
-                : 'text-[#9CA3AF] hover:text-white'
-            }`}
-          >
-            All
-          </button>
-          <button
-            onClick={() => setActiveFilter('playlists')}
-            className={`px-2.5 py-0.5 rounded-md text-[11px] font-mono font-medium transition-all ${
-              activeFilter === 'playlists'
-                ? 'bg-white/15 text-white'
-                : 'text-[#9CA3AF] hover:text-white'
-            }`}
-          >
-            Playlists
-          </button>
-          <button
-            onClick={() => setActiveFilter('local')}
-            className={`px-2.5 py-0.5 rounded-md text-[11px] font-mono font-medium transition-all ${
-              activeFilter === 'local'
-                ? 'bg-white/15 text-white'
-                : 'text-[#9CA3AF] hover:text-white'
-            }`}
-          >
-            Local
-          </button>
+          {(['all', 'playlists', 'local'] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => setActiveFilter(f)}
+              className={`px-2.5 py-0.5 rounded-md text-[11px] font-mono font-medium transition-all capitalize ${
+                activeFilter === f ? 'bg-white/15 text-white' : 'text-[#9CA3AF] hover:text-white'
+              }`}
+            >
+              {f === 'all' ? 'All' : f === 'playlists' ? 'Playlists' : 'Local'}
+            </button>
+          ))}
         </div>
 
         {/* Quick inline playlist creator */}
@@ -277,35 +224,6 @@ export function Sidebar() {
             <span>Add Folder</span>
           </button>
         </div>
-      </div>
-
-      {/* Bottom Footer Actions (Elevated above MiniPlayer) */}
-      <div className="px-3 py-2 border-t border-white/5 flex items-center justify-between gap-2 shrink-0">
-        <button
-          type="button"
-          onClick={() => handleNav('/docs')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all cursor-pointer ${
-            location.pathname === '/docs'
-              ? 'bg-[#0070F3] text-white shadow-glow'
-              : 'text-[#8B90A0] hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <FileText size={15} />
-          <span>Docs</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => handleNav('/settings')}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-mono font-medium transition-all cursor-pointer ${
-            location.pathname === '/settings'
-              ? 'bg-[#0070F3] text-white shadow-glow'
-              : 'text-[#8B90A0] hover:text-white hover:bg-white/5'
-          }`}
-        >
-          <Settings size={15} />
-          <span>Settings</span>
-        </button>
       </div>
     </motion.aside>
   );

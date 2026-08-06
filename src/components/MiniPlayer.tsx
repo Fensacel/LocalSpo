@@ -13,7 +13,7 @@ import {
   VolumeX,
   Volume1,
   ListMusic,
-  Mic2,
+  FileText,
   PanelRight,
   Maximize2,
   Timer,
@@ -288,8 +288,8 @@ export function MiniPlayer() {
             <PanelRight size={15} strokeWidth={1.8} />
           </ControlButton>
 
-          <ControlButton onClick={toggleLyrics} active={showLyrics} size="sm">
-            <Mic2 size={15} strokeWidth={1.8} />
+          <ControlButton onClick={toggleLyrics} active={showLyrics} size="sm" title="Lyrics">
+            <FileText size={15} strokeWidth={1.8} />
           </ControlButton>
 
           <ControlButton onClick={toggleQueue} size="sm" title="Queue">

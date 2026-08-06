@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { usePlayerStore, useSettingsStore, useFavoritesStore } from '@/stores';
-import { X, SkipForward, Mic2, ExternalLink, Heart } from 'lucide-react';
+import { X, SkipForward, FileText, ExternalLink, Heart } from 'lucide-react';
 import { getImageUrl } from '@/utils';
 import { parseLyrics, findCurrentLyricIndex } from '@/services/lyricsParser';
 import { RomanizationService } from '@/modules/romanization/RomanizationService';
@@ -183,7 +183,7 @@ export function NowPlayingPanel({ onClose }: NowPlayingPanelProps) {
           <div className="bg-[#151518] border border-white/5 hover:border-[#0070F3]/40 rounded-xl p-4 transition-all duration-200 group space-y-3">
             <div className="flex items-center justify-between text-[#8B90A0]">
               <span className="font-mono text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-                <Mic2 size={12} className="text-[#0070F3]" />
+                <FileText size={12} className="text-[#0070F3]" />
                 LYRICS
               </span>
               <button

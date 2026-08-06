@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useLibraryStore, usePlayerStore, useToastStore, useStreamingStore } from '@/stores';
+import { useLibraryStore, usePlayerStore, useToastStore, useStreamingStore, usePlaylistStore } from '@/stores';
+import { useProfileStore } from '@/stores/useProfileStore';
 import { useSpotifyStore } from '@/modules/downloader/stores/useSpotifyStore';
 import { useDownloaderStore } from '@/modules/downloader/stores/useDownloaderStore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,6 +15,8 @@ import {
   Loader2,
   HardDrive,
   ListPlus,
+  User,
+  ListMusic,
 } from 'lucide-react';
 
 import { formatTime, getImageUrl } from '@/utils';
@@ -22,11 +25,13 @@ import { createStreamSong } from '@/types/music';
 import type { SpotifySearchTrack } from '@/modules/downloader/types';
 import { SongContextMenu } from '@/components/SongContextMenu';
 import type { Song } from '@/types';
-import { SearchBar } from '@/components/SearchBar';
+import { SafeAvatar, SafeImage } from '@/components/SafeImage';
 
 export function SearchPage() {
   const { searchQuery, searchResults, isSearching } = useSpotifyStore();
   const { songs: localSongs, albums: localAlbums, artists: localArtists } = useLibraryStore();
+  const { playlists } = usePlaylistStore();
+  const { knownUsers, profile } = useProfileStore();
   const { setQueue, currentSong } = usePlayerStore();
   const { downloadUrl } = useDownloaderStore();
   const { showToast } = useToastStore();
@@ -54,6 +59,17 @@ export function SearchPage() {
 
   const matchingLocalArtists = q
     ? localArtists.filter((a) => a.name.toLowerCase().includes(q)).slice(0, 6)
+    : [];
+
+  const matchingLocalPlaylists = q
+    ? playlists.filter((p) => p.name.toLowerCase().includes(q) || p.description.toLowerCase().includes(q)).slice(0, 6)
+    : [];
+
+  const matchingUsers = q
+    ? [
+        ...(profile && (profile.username.toLowerCase().includes(q) || profile.displayName.toLowerCase().includes(q)) ? [profile] : []),
+        ...knownUsers.filter((u) => u.username.toLowerCase().includes(q) || u.displayName.toLowerCase().includes(q)),
+      ].slice(0, 6)
     : [];
 
   const onlineTracks = searchResults?.tracks || [];
@@ -117,53 +133,51 @@ export function SearchPage() {
     matchingLocalSongs.length > 0 ||
     matchingLocalAlbums.length > 0 ||
     matchingLocalArtists.length > 0 ||
+    matchingLocalPlaylists.length > 0 ||
+    matchingUsers.length > 0 ||
     onlineTracks.length > 0 ||
     onlineAlbums.length > 0 ||
     onlineArtists.length > 0;
 
   return (
     <div className="space-y-6 pb-12 select-none">
-      {/* Header Search Bar & Category Filter Chips */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <SearchBar />
-
-        {searchQuery.trim() && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setActiveTab('all')}
-              className={`px-3.5 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${
-                activeTab === 'all'
-                  ? 'bg-[#0070F3] text-white shadow-glow'
-                  : 'bg-[#151518] text-[#8B90A0] hover:text-white border border-white/5'
-              }`}
-            >
-              ALL RESULTS
-            </button>
-            <button
-              onClick={() => setActiveTab('online')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${
-                activeTab === 'online'
-                  ? 'bg-[#0070F3] text-white shadow-glow'
-                  : 'bg-[#151518] text-[#0070F3] hover:text-white border border-[#0070F3]/30'
-              }`}
-            >
-              <Radio size={13} />
-              ONLINE STREAM ({onlineTracks.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('local')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${
-                activeTab === 'local'
-                  ? 'bg-[#0070F3] text-white shadow-glow'
-                  : 'bg-[#151518] text-emerald-400 hover:text-white border border-emerald-500/30'
-              }`}
-            >
-              <HardDrive size={13} />
-              LOCAL LIBRARY ({matchingLocalSongs.length})
-            </button>
-          </div>
-        )}
-      </div>
+      {/* Category Filter Chips */}
+      {searchQuery.trim() && (
+        <div className="flex items-center justify-end gap-2 flex-wrap">
+          <button
+            onClick={() => setActiveTab('all')}
+            className={`px-3.5 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${
+              activeTab === 'all'
+                ? 'bg-[#0070F3] text-white shadow-glow'
+                : 'bg-[#151518] text-[#8B90A0] hover:text-white border border-white/5'
+            }`}
+          >
+            ALL RESULTS
+          </button>
+          <button
+            onClick={() => setActiveTab('online')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${
+              activeTab === 'online'
+                ? 'bg-[#0070F3] text-white shadow-glow'
+                : 'bg-[#151518] text-[#0070F3] hover:text-white border border-[#0070F3]/30'
+            }`}
+          >
+            <Radio size={13} />
+            ONLINE STREAM ({onlineTracks.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('local')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-md text-xs font-mono font-bold transition-all ${
+              activeTab === 'local'
+                ? 'bg-[#0070F3] text-white shadow-glow'
+                : 'bg-[#151518] text-emerald-400 hover:text-white border border-emerald-500/30'
+            }`}
+          >
+            <HardDrive size={13} />
+            LOCAL LIBRARY ({matchingLocalSongs.length})
+          </button>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <AnimatePresence mode="wait">
@@ -397,17 +411,43 @@ export function SearchPage() {
                 </span>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
                   {matchingLocalAlbums.map((album) => {
-                    const coverSrc = album.coverPath ? getImageUrl(album.coverPath) : '/default-cover.png';
                     return (
                       <div
                         key={album.id}
-                        onClick={() => navigate(`/albums/${album.id}`)}
+                        onClick={() => navigate(`/albums/${encodeURIComponent(album.id)}`)}
                         className="group cursor-pointer bg-[#151518] hover:bg-[#1C1B1B] p-3 rounded-xl border border-white/5 transition-all"
                       >
                         <div className="rounded-lg overflow-hidden aspect-square mb-2 bg-white/5">
-                          <img src={coverSrc} alt={album.name} className="w-full h-full object-cover" />
+                          <SafeImage src={album.coverPath} alt={album.name} className="w-full h-full object-cover" />
                         </div>
                         <p className="text-xs font-bold text-white truncate">{album.name}</p>
+                        <p className="text-[11px] font-mono text-[#8B90A0] truncate mt-0.5">{album.artist}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* 3b. Online Albums */}
+            {(activeTab === 'all' || activeTab === 'online') && onlineAlbums.length > 0 && (
+              <section className="space-y-3">
+                <span className="font-mono text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                  <Disc3 size={14} className="text-amber-400" /> ONLINE ALBUMS ({onlineAlbums.length})
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {onlineAlbums.map((album: any) => {
+                    const albumId = album.id || album.spotifyId || album.name;
+                    return (
+                      <div
+                        key={albumId}
+                        onClick={() => navigate(`/albums/${encodeURIComponent(albumId)}`)}
+                        className="group cursor-pointer bg-[#151518] hover:bg-[#1C1B1B] p-3 rounded-xl border border-white/5 transition-all"
+                      >
+                        <div className="rounded-lg overflow-hidden aspect-square mb-2 bg-white/5">
+                          <SafeImage src={album.coverUrl || album.coverPath} alt={album.name || album.title} className="w-full h-full object-cover" />
+                        </div>
+                        <p className="text-xs font-bold text-white truncate">{album.name || album.title}</p>
                         <p className="text-[11px] font-mono text-[#8B90A0] truncate mt-0.5">{album.artist}</p>
                       </div>
                     );
@@ -438,6 +478,62 @@ export function SearchPage() {
                       </div>
                       <p className="text-xs font-bold text-white text-center w-20 truncate group-hover:text-[#0070F3] transition-colors">
                         {artist.name}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* 5. Playlists */}
+            {matchingLocalPlaylists.length > 0 && (
+              <section className="space-y-3">
+                <span className="font-mono text-xs font-bold text-purple-400 uppercase tracking-wider flex items-center gap-2">
+                  <ListMusic size={14} /> PLAYLISTS
+                </span>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                  {matchingLocalPlaylists.map((pl) => (
+                    <div
+                      key={pl.id}
+                      onClick={() => navigate(`/playlists/${pl.id}`)}
+                      className="group cursor-pointer bg-[#151518] hover:bg-[#1C1B1B] p-3 rounded-xl border border-white/5 transition-all"
+                    >
+                      <div className="rounded-lg overflow-hidden aspect-square mb-2 bg-white/5 flex items-center justify-center">
+                        {pl.coverPath ? (
+                          <SafeImage src={pl.coverPath} alt={pl.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <ListMusic size={24} className="text-white/20" />
+                        )}
+                      </div>
+                      <p className="text-xs font-bold text-white truncate">{pl.name}</p>
+                      <p className="text-[11px] font-mono text-[#8B90A0] truncate mt-0.5">{pl.songIds.length} tracks</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* 6. Users */}
+            {matchingUsers.length > 0 && (
+              <section className="space-y-3">
+                <span className="font-mono text-xs font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-2">
+                  <User size={14} /> USERS
+                </span>
+                <div className="flex gap-4 overflow-x-auto pb-2">
+                  {matchingUsers.map((u) => (
+                    <div
+                      key={u.id}
+                      onClick={() => navigate(`/profile/${u.username}`)}
+                      className="flex flex-col items-center gap-2 cursor-pointer shrink-0 group"
+                    >
+                      <div className="w-18 h-18 rounded-full bg-[#151518] border border-white/10 flex items-center justify-center overflow-hidden">
+                        <SafeAvatar src={u.avatarUrl} alt={u.displayName} sizeClassName="w-full h-full" />
+                      </div>
+                      <p className="text-xs font-bold text-white text-center w-24 truncate group-hover:text-cyan-400 transition-colors">
+                        {u.displayName}
+                      </p>
+                      <p className="text-[10px] font-mono text-[#8B90A0] text-center w-24 truncate">
+                        @{u.username}
                       </p>
                     </div>
                   ))}

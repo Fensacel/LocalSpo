@@ -6,7 +6,7 @@ import {
   Heart,
   Volume2,
   VolumeX,
-  Mic2,
+  Music,
   Play,
   Pause,
   SkipBack,
@@ -358,7 +358,7 @@ export function NowPlayingOverlay() {
                     className="w-full h-full flex items-center justify-center bg-white/[0.04]"
                     style={{ borderRadius: '20px' }}
                   >
-                    <Mic2 size={72} className="text-white/15" />
+                    <Music size={72} className="text-white/15" />
                   </div>
                 )}
               </motion.div>
@@ -553,15 +553,6 @@ export function NowPlayingOverlay() {
 
                       const showSubRomanization = mode === 'both' && !!line.romanization;
 
-                      const tokens = displayText.split(/(\s+)/);
-                      const wordsOnly = tokens.filter(t => t.trim().length > 0);
-                      const totalChars = wordsOnly.reduce((acc, w) => acc + w.length, 0);
-                      const lineStart = line.time;
-                      const lineEnd = line.endTime || (line.time + 3.5);
-                      const lineDuration = Math.max(0.5, lineEnd - lineStart);
-                      
-                      let cumulativeChars = 0;
-
                       return (
                         <div
                           key={idx}
@@ -586,41 +577,7 @@ export function NowPlayingOverlay() {
                                 : 'text-base sm:text-lg md:text-xl lg:text-[25px] font-bold'
                             }`}
                           >
-                            {isActive ? (
-                              totalChars === 0 ? displayText : tokens.map((token, tokenIdx) => {
-                                const isWhitespace = token.trim().length === 0;
-                                if (isWhitespace) return <span key={tokenIdx}>{token}</span>;
-
-                                const wordLength = token.length;
-                                const wordStartOffset = (cumulativeChars / totalChars) * lineDuration;
-                                const wordStart = lineStart + wordStartOffset;
-                                const isWordActive = currentTime >= wordStart;
-
-                                cumulativeChars += wordLength;
-
-                                return (
-                                  <motion.span
-                                    key={tokenIdx}
-                                    animate={{
-                                      color: isWordActive ? '#ffffff' : 'rgba(255, 255, 255, 0.35)',
-                                      textShadow: isWordActive ? '0 0 12px rgba(255, 255, 255, 0.4)' : 'none',
-                                    }}
-                                    transition={{ duration: 0.15 }}
-                                    className="inline-block"
-                                    onClick={(e) => {
-                                      if (seekByLyricsEnabled === false) return;
-                                      e.stopPropagation();
-                                      usePlayerStore.getState().setCurrentTime(wordStart);
-                                      window.dispatchEvent(new CustomEvent('player:seek', { detail: wordStart }));
-                                    }}
-                                  >
-                                    {token}
-                                  </motion.span>
-                                );
-                              })
-                            ) : (
-                              displayText
-                            )}
+                            {displayText}
                           </motion.p>
 
                           {/* Sub Romanization Line (Both mode) */}
@@ -659,7 +616,9 @@ export function NowPlayingOverlay() {
                 {/* Empty state */}
                 {!isLoadingLyrics && !lyrics && (
                   <div className="flex flex-col items-start justify-center h-full pl-2 gap-5">
-                    <div className="text-6xl">🎤</div>
+                    <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/5 flex items-center justify-center">
+                      <Music size={28} className="text-white/20" />
+                    </div>
                     <div>
                       <p className="text-[28px] font-semibold text-white/30">No lyrics available</p>
                       <p className="text-white/18 text-base mt-2">

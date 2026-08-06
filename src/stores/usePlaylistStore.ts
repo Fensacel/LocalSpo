@@ -21,17 +21,39 @@ interface PlaylistState {
   toggleFavoritePlaylist: (id: string) => Promise<void>;
 }
 
+function deduplicatePlaylists(list: Playlist[]): Playlist[] {
+  const seenIds = new Set<string>();
+  const result: Playlist[] = [];
+  for (const pl of list) {
+    if (!pl || !pl.id) continue;
+    if (seenIds.has(pl.id)) continue;
+    seenIds.add(pl.id);
+    result.push({
+      ...pl,
+      description: pl.description || '',
+      coverPath: pl.coverPath || null,
+      songIds: Array.isArray(pl.songIds) ? pl.songIds : [],
+      createdAt: pl.createdAt || Date.now(),
+      updatedAt: pl.updatedAt || Date.now(),
+      isPinned: !!pl.isPinned,
+      isFavorite: !!pl.isFavorite,
+    });
+  }
+  return result;
+}
+
 export const usePlaylistStore = create<PlaylistState>((set, get) => ({
   playlists: [],
   isLoaded: false,
 
   loadPlaylists: async () => {
     try {
-      const data = (await platformService.data.read('playlist.json')) as {
+      const data = (await platformService.data.read('playlists.json')) as {
         playlists: Playlist[];
       } | null;
       if (data && Array.isArray(data.playlists)) {
-        set({ playlists: data.playlists, isLoaded: true });
+        const unique = deduplicatePlaylists(data.playlists);
+        set({ playlists: unique, isLoaded: true });
 
         // Pre-stream playlist songs in background on launch
         setTimeout(() => {
@@ -39,7 +61,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
           const streamingStore = useStreamingStore.getState();
           const songsToPrestream: Song[] = [];
 
-          data.playlists.forEach((pl) => {
+          unique.forEach((pl) => {
             pl.songIds.forEach((sId) => {
               const found = allSongs.find((s) => s.id === sId);
               if (found && !found.path) {

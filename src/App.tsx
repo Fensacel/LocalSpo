@@ -14,26 +14,43 @@ import { SearchPage } from '@/pages/SearchPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { DocsPage } from '@/pages/DocsPage';
 import { DownloadsPage } from '@/modules/downloader/pages/DownloadsPage';
+import { ProfilePage } from '@/pages/ProfilePage';
+import { UsersPage } from '@/pages/UsersPage';
+import { StatsPage } from '@/pages/StatsPage';
 import { useSettingsStore, useFavoritesStore, useHistoryStore, usePlaylistStore } from '@/stores';
+import { useProfileStore } from '@/stores/useProfileStore';
+import { useStatsStore } from '@/stores/useStatsStore';
 import { useEffect } from 'react';
 import { AudioEngine } from '@/features/player/AudioEngine';
 import { useScanner } from '@/hooks/useScanner';
+import { useWindowsTaskbar } from '@/hooks/useWindowsTaskbar';
+import { useDynamicTheme } from '@/hooks/useDynamicTheme';
 
 export function App() {
   const loadSettings = useSettingsStore((s) => s.loadSettings);
   const loadFavorites = useFavoritesStore((s) => s.loadFavorites);
   const loadHistory = useHistoryStore((s) => s.loadHistory);
   const loadPlaylists = usePlaylistStore((s) => s.loadPlaylists);
+  const loadProfile = useProfileStore((s) => s.loadProfile);
+  const loadStats = useStatsStore((s: any) => s.loadStats);
 
   useEffect(() => {
     loadSettings();
     loadFavorites();
     loadHistory();
     loadPlaylists();
-  }, [loadSettings, loadFavorites, loadHistory, loadPlaylists]);
+    loadProfile();
+    loadStats();
+  }, [loadSettings, loadFavorites, loadHistory, loadPlaylists, loadProfile, loadStats]);
 
   // Initialize scanner and load library
   useScanner();
+
+  // Windows Taskbar Integration (title, thumbnail toolbar, media keys)
+  useWindowsTaskbar();
+
+  // Dynamic Theme: extract accent color from album art on each track change
+  useDynamicTheme();
 
   return (
     <HashRouter>
@@ -54,6 +71,10 @@ export function App() {
           <Route path="/search" element={<SearchPage />} />
           <Route path="/docs" element={<DocsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/profile/:username" element={<ProfilePage />} />
+          <Route path="/users" element={<UsersPage />} />
+          <Route path="/stats" element={<StatsPage />} />
         </Route>
       </Routes>
     </HashRouter>

@@ -117,7 +117,7 @@ export function createStreamSong(data: {
     path: '',
     fileSize: 0,
     hash: '',
-    coverPath: null,
+    coverPath: data.coverUrl || null,
     remoteCoverUrl: data.coverUrl,
     hasEmbeddedCover: false,
     hasEmbeddedLyrics: false,

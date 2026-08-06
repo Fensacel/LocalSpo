@@ -3,7 +3,7 @@ import { usePlayerStore, useSettingsStore } from '@/stores';
 import { motion, AnimatePresence } from 'framer-motion';
 import { parseLyrics, findCurrentLyricIndex } from '@/services/lyricsParser';
 import type { LyricsData } from '@/types';
-import { Mic2 } from 'lucide-react';
+import { FileText, Music } from 'lucide-react';
 
 import { RomanizationService } from '@/modules/romanization/RomanizationService';
 
@@ -114,7 +114,7 @@ export function LyricsPanel() {
       >
         {/* Header */}
         <div className="px-5 py-4 border-b border-white/5 flex items-center gap-2">
-          <Mic2 size={16} className="text-primary" />
+          <FileText size={16} className="text-primary" />
           <span className="text-sm font-semibold text-text/70">Lyrics</span>
         </div>
 
@@ -142,7 +142,7 @@ export function LyricsPanel() {
           {!isLoading && !lyrics && (
             <div className="flex flex-col items-center justify-center h-full text-center gap-3">
               <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center">
-                <Mic2 size={24} className="text-text/15" />
+                <Music size={24} className="text-text/15" />
               </div>
               <div>
                 <p className="text-sm font-medium text-text/25">No lyrics found</p>
