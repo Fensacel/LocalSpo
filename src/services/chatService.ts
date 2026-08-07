@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import type { UserProfile } from './profileService';
 
 export interface Conversation {
   id: string;
@@ -18,6 +19,13 @@ export interface ChatMessage {
   sender_id: string;
   content: string;
   created_at: string;
+}
+
+export interface UserConversationItem {
+  conversationId: string;
+  otherUser: UserProfile;
+  lastMessage: ChatMessage | null;
+  updatedAt: string;
 }
 
 export class ChatService {
@@ -182,9 +190,7 @@ export class ChatService {
           filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          if (payload.new) {
-            callback(payload.new as ChatMessage);
-          }
+          callback(payload.new as ChatMessage);
         }
       )
       .subscribe();
@@ -192,5 +198,60 @@ export class ChatService {
     return () => {
       supabase.removeChannel(channel);
     };
+  }
+
+  /** Fetch active chat conversations list for user (Chat History) */
+  public static async getUserConversations(userId: string): Promise<UserConversationItem[]> {
+    if (!userId) return [];
+    try {
+      const { data: myParticipants, error: partErr } = await supabase
+        .from('participants')
+        .select('conversation_id')
+        .eq('user_id', userId);
+
+      if (partErr || !myParticipants || myParticipants.length === 0) return [];
+      const convIds = myParticipants.map((p) => p.conversation_id);
+
+      const { data: allParticipants, error: allErr } = await supabase
+        .from('participants')
+        .select('conversation_id, user_id')
+        .in('conversation_id', convIds)
+        .neq('user_id', userId);
+
+      if (allErr || !allParticipants || allParticipants.length === 0) return [];
+
+      const result: UserConversationItem[] = [];
+
+      for (const p of allParticipants) {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', p.user_id)
+          .maybeSingle();
+
+        if (!profileData) continue;
+
+        const { data: lastMsgData } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', p.conversation_id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        result.push({
+          conversationId: p.conversation_id,
+          otherUser: profileData as UserProfile,
+          lastMessage: lastMsgData as ChatMessage | null,
+          updatedAt: lastMsgData?.created_at || new Date().toISOString(),
+        });
+      }
+
+      result.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      return result;
+    } catch (err) {
+      console.error('[ChatService] getUserConversations error:', err);
+      return [];
+    }
   }
 }

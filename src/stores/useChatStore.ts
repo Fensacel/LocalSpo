@@ -5,22 +5,25 @@ import type { UserProfile } from '@/services/profileService';
 interface ChatStoreState {
   hasUnread: boolean;
   unreadCount: number;
-  friends: UserProfile[];
-  friendIds: string[];
+  friends: UserProfile[]; // Mutual Friends (Saling Follow)
+  followingIds: string[];
+  followerIds: string[];
   isLoadingFriends: boolean;
 
   setHasUnread: (hasUnread: boolean) => void;
   clearUnread: () => void;
   fetchFriends: (userId: string) => Promise<void>;
-  toggleFriend: (userId: string, friendId: string) => Promise<boolean>;
-  isFriend: (friendId: string) => boolean;
+  toggleFollow: (userId: string, targetId: string) => Promise<boolean>;
+  isFollowing: (targetId: string) => boolean;
+  isMutualFriend: (targetId: string) => boolean;
 }
 
 export const useChatStore = create<ChatStoreState>((set, get) => ({
   hasUnread: false,
   unreadCount: 0,
   friends: [],
-  friendIds: [],
+  followingIds: [],
+  followerIds: [],
   isLoadingFriends: false,
 
   setHasUnread: (hasUnread) =>
@@ -35,37 +38,42 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
     if (!userId) return;
     set({ isLoadingFriends: true });
     try {
-      const friends = await FriendService.getFriendsProfiles(userId);
-      const friendIds = friends.map((f) => f.id);
-      set({ friends, friendIds, isLoadingFriends: false });
+      const [friends, followingIds, followerIds] = await Promise.all([
+        FriendService.getMutualFriendsProfiles(userId),
+        FriendService.getFollowingIds(userId),
+        FriendService.getFollowerIds(userId),
+      ]);
+      set({ friends, followingIds, followerIds, isLoadingFriends: false });
     } catch (err) {
       console.error('[useChatStore] fetchFriends error:', err);
       set({ isLoadingFriends: false });
     }
   },
 
-  toggleFriend: async (userId, friendId) => {
-    if (!userId || !friendId) return false;
-    const isCurrentlyFriend = get().friendIds.includes(friendId);
+  toggleFollow: async (userId, targetId) => {
+    if (!userId || !targetId) return false;
+    const currentlyFollowing = get().followingIds.includes(targetId);
 
-    if (isCurrentlyFriend) {
-      const success = await FriendService.removeFriendByUsers(userId, friendId);
-      if (success) {
-        set((state) => ({
-          friends: state.friends.filter((f) => f.id !== friendId),
-          friendIds: state.friendIds.filter((id) => id !== friendId),
-        }));
-        return false;
-      }
+    if (currentlyFollowing) {
+      // Optimistically unfollow
+      set((state) => ({
+        followingIds: state.followingIds.filter((id) => id !== targetId),
+        friends: state.friends.filter((f) => f.id !== targetId),
+      }));
+      await FriendService.toggleFollow(userId, targetId);
+      get().fetchFriends(userId);
+      return false;
     } else {
-      const success = await FriendService.addFriend(userId, friendId);
-      if (success) {
-        get().fetchFriends(userId);
-        return true;
-      }
+      // Optimistically follow
+      set((state) => ({
+        followingIds: [...state.followingIds, targetId],
+      }));
+      await FriendService.toggleFollow(userId, targetId);
+      get().fetchFriends(userId);
+      return true;
     }
-    return isCurrentlyFriend;
   },
 
-  isFriend: (friendId) => get().friendIds.includes(friendId),
+  isFollowing: (targetId) => get().followingIds.includes(targetId),
+  isMutualFriend: (targetId) => get().followingIds.includes(targetId) && get().followerIds.includes(targetId),
 }));

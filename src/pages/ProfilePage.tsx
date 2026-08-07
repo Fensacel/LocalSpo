@@ -24,10 +24,12 @@ import { useProfileStore } from '@/stores/useProfileStore';
 import { useStatsStore } from '@/stores/useStatsStore';
 import { usePlaylistStore } from '@/stores';
 import { useChatStore } from '@/stores/useChatStore';
+import { FriendService } from '@/services/friendService';
 import { SafeAvatar, SafeBanner, SafeImage } from '@/components/SafeImage';
 import { useAuth } from '@/hooks/useAuth';
 import { ProfileService } from '@/services/profileService';
 import { SocialChatDrawer } from '@/components/SocialChatDrawer';
+import { FollowListModal } from '@/components/FollowListModal';
 
 function StatCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
   return (
@@ -45,15 +47,20 @@ export function ProfilePage() {
   const { profile: localProfile, loadProfile, saveProfile, updateAvatar, updateBanner } = useProfileStore();
   const stats = useStatsStore();
   const { playlists } = usePlaylistStore();
-  const { isFriend, toggleFriend, fetchFriends } = useChatStore();
+  const { isFollowing, isMutualFriend, toggleFollow, fetchFriends, followingIds, followerIds } = useChatStore();
   const [isEditing, setIsEditing] = useState(false);
   const [showChatModal, setShowChatModal] = useState(false);
+  const [followModalType, setFollowModalType] = useState<'followers' | 'following' | null>(null);
+
+  const [realtimeFollowersCount, setRealtimeFollowersCount] = useState<number>(0);
+  const [realtimeFollowingCount, setRealtimeFollowingCount] = useState<number>(0);
 
   useEffect(() => {
-    if (user?.id) {
-      fetchFriends(user.id);
+    const currentUserId = user?.id || authProfile?.id || localProfile?.id;
+    if (currentUserId) {
+      fetchFriends(currentUserId);
     }
-  }, [user?.id, fetchFriends]);
+  }, [user?.id, authProfile?.id, localProfile?.id, fetchFriends]);
 
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -61,28 +68,85 @@ export function ProfilePage() {
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
 
-  // Effective profile: merge Supabase Auth Profile with Local Profile
-  const profile = authProfile ? {
-    ...localProfile,
-    id: authProfile.id,
-    username: authProfile.username,
-    displayName: authProfile.display_name,
-    avatarUrl: avatarPreview || authProfile.avatar_url || localProfile?.avatarUrl || null,
-    bannerUrl: bannerPreview || authProfile.banner_url || localProfile?.bannerUrl || null,
-    bio: authProfile.bio || localProfile?.bio || '',
-    country: localProfile?.country || '',
-    favoriteGenres: localProfile?.favoriteGenres || [],
-    favoriteArtists: localProfile?.favoriteArtists || [],
-    favoriteAlbumIds: localProfile?.favoriteAlbumIds || [],
-    favoriteSongIds: localProfile?.favoriteSongIds || [],
-    joinDate: localProfile?.joinDate || Date.now(),
-    isVerified: localProfile?.isVerified || false,
-    followersCount: localProfile?.followersCount || 0,
-    followingCount: localProfile?.followingCount || 0,
-    following: localProfile?.following || [],
-    followers: localProfile?.followers || [],
-    publicPlaylistIds: localProfile?.publicPlaylistIds || [],
-  } : localProfile;
+  const [fetchedTargetProfile, setFetchedTargetProfile] = useState<any | null>(null);
+
+  const isOwnProfile = !username || username === authProfile?.username || username === localProfile?.username || username === 'me';
+
+  useEffect(() => {
+    if (!isOwnProfile && username) {
+      const loadTarget = async () => {
+        let p = await ProfileService.getProfileByUsername(username);
+        if (!p && username.length > 20) {
+          p = await ProfileService.getProfile(username);
+        }
+        if (p) {
+          setFetchedTargetProfile({
+            id: p.id,
+            username: p.username,
+            displayName: p.display_name,
+            avatarUrl: p.avatar_url,
+            bannerUrl: p.banner_url,
+            bio: p.bio,
+            country: '',
+            favoriteGenres: [],
+            favoriteArtists: [],
+            favoriteAlbumIds: [],
+            favoriteSongIds: [],
+            joinDate: p.created_at ? new Date(p.created_at).getTime() : Date.now(),
+            isVerified: false,
+            followersCount: 0,
+            followingCount: 0,
+            following: [],
+            followers: [],
+            publicPlaylistIds: [],
+          });
+        } else {
+          setFetchedTargetProfile(null);
+        }
+      };
+      loadTarget();
+    }
+  }, [username, isOwnProfile, authProfile?.username, localProfile?.username]);
+
+  // Effective profile to display: own profile vs fetched target user profile
+  const profile = isOwnProfile
+    ? (authProfile ? {
+        ...localProfile,
+        id: authProfile.id,
+        username: authProfile.username,
+        displayName: authProfile.display_name,
+        avatarUrl: avatarPreview || authProfile.avatar_url || localProfile?.avatarUrl || null,
+        bannerUrl: bannerPreview || authProfile.banner_url || localProfile?.bannerUrl || null,
+        bio: authProfile.bio || localProfile?.bio || '',
+        country: localProfile?.country || '',
+        favoriteGenres: localProfile?.favoriteGenres || [],
+        favoriteArtists: localProfile?.favoriteArtists || [],
+        favoriteAlbumIds: localProfile?.favoriteAlbumIds || [],
+        favoriteSongIds: localProfile?.favoriteSongIds || [],
+        joinDate: localProfile?.joinDate || Date.now(),
+        isVerified: localProfile?.isVerified || false,
+        followersCount: localProfile?.followersCount || 0,
+        followingCount: localProfile?.followingCount || 0,
+        following: localProfile?.following || [],
+        followers: localProfile?.followers || [],
+        publicPlaylistIds: localProfile?.publicPlaylistIds || [],
+      } : localProfile)
+    : fetchedTargetProfile;
+
+  useEffect(() => {
+    if (isOwnProfile) {
+      setRealtimeFollowersCount(followerIds.length);
+      setRealtimeFollowingCount(followingIds.length);
+    } else if (profile?.id) {
+      Promise.all([
+        FriendService.getFollowerIds(profile.id),
+        FriendService.getFollowingIds(profile.id),
+      ]).then(([foll, fing]) => {
+        setRealtimeFollowersCount(foll.length);
+        setRealtimeFollowingCount(fing.length);
+      });
+    }
+  }, [isOwnProfile, profile?.id, followerIds.length, followingIds.length]);
 
   const [editForm, setEditForm] = useState({
     displayName: '',
@@ -108,8 +172,6 @@ export function ProfilePage() {
       });
     }
   }, [profile?.displayName, profile?.username, profile?.bio]);
-
-  const isOwnProfile = !username || username === profile?.username || username === 'me';
 
   const handleAvatarFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -279,8 +341,22 @@ export function ProfilePage() {
               </div>
               <p className="text-[#8B90A0] text-sm font-mono">@{profile.username}</p>
               <div className="flex flex-wrap items-center gap-4 mt-2 text-xs text-[#8B90A0] font-mono">
-                <span className="flex items-center gap-1"><Users size={12} />{profile.followersCount} followers</span>
-                <span className="flex items-center gap-1"><Users size={12} />{profile.followingCount} following</span>
+                <button
+                  type="button"
+                  onClick={() => setFollowModalType('followers')}
+                  className="flex items-center gap-1 hover:text-[#0070F3] hover:underline transition-colors cursor-pointer"
+                >
+                  <Users size={12} />
+                  <span>{realtimeFollowersCount} followers</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFollowModalType('following')}
+                  className="flex items-center gap-1 hover:text-[#0070F3] hover:underline transition-colors cursor-pointer"
+                >
+                  <Users size={12} />
+                  <span>{realtimeFollowingCount} following</span>
+                </button>
                 <span className="flex items-center gap-1">
                   <Calendar size={12} />Joined {new Date(profile.joinDate).toLocaleDateString()}
                 </span>
@@ -290,9 +366,9 @@ export function ProfilePage() {
           )}
         </div>
 
-        {/* Edit / Save / Message / Add Friend actions */}
+        {/* Edit / Save / Message / Follow actions */}
         <div className="flex items-center gap-2 pb-2">
-          {!isEditing && (
+          {!isEditing && !isOwnProfile && (
             <button
               onClick={() => setShowChatModal(true)}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0070F3] text-white text-sm font-semibold hover:bg-[#0070F3]/80 transition-all cursor-pointer shadow-glow"
@@ -306,22 +382,28 @@ export function ProfilePage() {
               type="button"
               onClick={async () => {
                 if (user?.id && profile.id) {
-                  await toggleFriend(user.id, profile.id);
+                  await toggleFollow(user.id, profile.id);
                 }
               }}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
-                isFriend(profile.id)
+                isMutualFriend(profile.id)
+                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-red-500/20 hover:text-red-400'
+                  : isFollowing(profile.id)
                   ? 'bg-white/10 text-white border border-white/20 hover:bg-red-500/20 hover:text-red-400'
                   : 'bg-[#0070F3] text-white hover:bg-[#005bb5] shadow-glow'
               }`}
             >
-              {isFriend(profile.id) ? (
+              {isMutualFriend(profile.id) ? (
                 <>
-                  <UserCheck size={14} /> Friends ✓
+                  <UserCheck size={14} /> Friends 👥
+                </>
+              ) : isFollowing(profile.id) ? (
+                <>
+                  <UserCheck size={14} /> Following ✓
                 </>
               ) : (
                 <>
-                  <UserPlus size={14} /> Add Friend
+                  <UserPlus size={14} /> Follow
                 </>
               )}
             </button>
@@ -373,6 +455,7 @@ export function ProfilePage() {
           <StatCard label="Streak" value={`🔥 ${stats.getListeningStreak()} Days`} icon={<Flame size={12} className="text-amber-400" />} />
         </div>
       </section>
+
 
       {/* ── Top Songs (with artwork) ───────────────────────────────────────── */}
       {topSongs.length > 0 && (
@@ -514,7 +597,7 @@ export function ProfilePage() {
             />
           ) : (
             <div className="flex flex-wrap gap-2">
-              {profile.favoriteGenres.map((g) => (
+              {profile.favoriteGenres.map((g: string) => (
                 <span key={g} className="px-3 py-1.5 rounded-full bg-[#0070F3]/15 border border-[#0070F3]/30 text-xs text-[#0070F3] font-semibold font-mono flex items-center gap-1.5">
                   <Tag size={11} /> {g}
                 </span>
@@ -529,6 +612,14 @@ export function ProfilePage() {
         isOpen={showChatModal}
         onClose={() => setShowChatModal(false)}
         initialUserId={isOwnProfile ? undefined : profile?.id}
+      />
+
+      {/* Followers / Following List Modal */}
+      <FollowListModal
+        isOpen={!!followModalType}
+        onClose={() => setFollowModalType(null)}
+        type={followModalType || 'followers'}
+        targetUserId={profile?.id || ''}
       />
     </motion.div>
   );

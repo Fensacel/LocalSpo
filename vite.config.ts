@@ -21,7 +21,7 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['music-metadata', 'chokidar'],
+              external: ['music-metadata', 'chokidar', '@xhayper/discord-rpc'],
             },
           },
         },
@@ -35,7 +35,7 @@ export default defineConfig({
           build: {
             outDir: 'dist-electron',
             rollupOptions: {
-              external: ['music-metadata', 'chokidar'],
+              external: ['music-metadata', 'chokidar', '@xhayper/discord-rpc'],
             },
           },
         },

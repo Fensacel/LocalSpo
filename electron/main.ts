@@ -16,6 +16,32 @@ app.commandLine.appendSwitch('disable-gpu-shader-disk-cache');
 import crypto from 'crypto';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { registerScannerIpc } from './scanner';
+
+// Load .env manually — Vite only exposes VITE_* vars to the renderer,
+// but Electron main process needs direct env vars like DISCORD_CLIENT_ID.
+// dist-electron/main.js lives one level below the project root.
+try {
+  const _mainDir = path.dirname(fileURLToPath(import.meta.url));
+  const _projectRoot = path.resolve(_mainDir, '..');
+  const _envPath = path.join(_projectRoot, '.env');
+  if (fs.existsSync(_envPath)) {
+    const envContent = fs.readFileSync(_envPath, 'utf-8');
+    for (const line of envContent.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const eqIdx = trimmed.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = trimmed.slice(0, eqIdx).trim();
+      const value = trimmed.slice(eqIdx + 1).trim();
+      if (key) {
+        if (value || !process.env[key]) {
+          process.env[key] = value;
+        }
+      }
+    }
+    console.log('[Main] Loaded .env, DISCORD_CLIENT_ID:', process.env.DISCORD_CLIENT_ID ? process.env.DISCORD_CLIENT_ID : 'NOT SET');
+  }
+} catch (e) { console.warn('[Main] Could not load .env:', e); }
 import { registerDownloaderIpc } from './ipc/downloaderIpc';
 import { registerPlaylistSyncIpc } from './ipc/playlistSyncIpc';
 import { registerStreamingIpc } from './ipc/streamingIpc';
@@ -696,6 +722,8 @@ function registerIpcHandlers(): void {
 
 import { registerOBSIpc } from './ipc/obsIpc';
 import { registerTaskbarIpc } from './ipc/taskbarIpc';
+import { registerDiscordIpc } from './ipc/discordIpc';
+import { discordService } from './discord/discordService';
 
 // ─── Single Instance & Deep Link Setup ──────────────────
 const gotTheLock = app.requestSingleInstanceLock();
@@ -723,7 +751,12 @@ app.on('open-url', (event, url) => {
   }
 });
 
-app.whenReady().then(() => {
+// ─── Discord Client ID accessor ─────────────────────────
+function getDiscordClientId(): string {
+  return process.env.DISCORD_CLIENT_ID?.trim() || '1535231503741751437';
+}
+
+app.whenReady().then(async () => {
   registerLocalProtocol();
   migrateLegacyData();
   registerIpcHandlers();
@@ -733,6 +766,18 @@ app.whenReady().then(() => {
   registerStreamingIpc(getDataPath, () => mainWindow);
   registerOBSIpc(getDataPath);
   registerTaskbarIpc(() => mainWindow);
+
+  // Discord Rich Presence – register IPC bridge and auto-connect
+  registerDiscordIpc(getDiscordClientId, () => mainWindow);
+  const discordClientId = getDiscordClientId();
+  if (discordClientId) {
+    discordService.initialize(discordClientId).catch((err) => {
+      console.warn('[DiscordRPC] Initial connect failed (Discord may not be running):', err?.message);
+    });
+  } else {
+    console.warn('[DiscordRPC] DISCORD_CLIENT_ID not set – Rich Presence is disabled.');
+  }
+
   setupAutoUpdater();
   createWindow();
 
@@ -748,6 +793,12 @@ app.whenReady().then(() => {
       createWindow();
     }
   });
+});
+
+// Cleanly shutdown Discord RPC before the app quits
+app.on('before-quit', () => {
+  discordService.clearPresence().catch(() => {});
+  discordService.shutdown();
 });
 
 app.on('window-all-closed', () => {

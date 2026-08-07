@@ -1,132 +1,126 @@
 import { supabase } from '@/lib/supabase';
 import type { UserProfile } from './profileService';
 
-export type FriendStatus = 'pending' | 'accepted' | 'blocked';
-
 export interface FriendRelationship {
   id: string;
   sender_id: string;
   receiver_id: string;
-  status: FriendStatus;
+  status: 'pending' | 'accepted' | 'rejected';
   created_at: string;
-  sender?: UserProfile;
-  receiver?: UserProfile;
 }
 
 export class FriendService {
-  /** Send friend request */
-  public static async sendFriendRequest(senderId: string, receiverId: string): Promise<{ success: boolean; error?: string }> {
-    if (senderId === receiverId) return { success: false, error: 'Cannot send friend request to yourself' };
-
+  /** Toggle Follow (Follow/Unfollow) using exact Supabase columns (sender_id, receiver_id) */
+  public static async toggleFollow(userId: string, targetId: string): Promise<boolean> {
+    if (!userId || !targetId || userId === targetId) return false;
     try {
-      const { error } = await supabase.from('friends').insert({
-        sender_id: senderId,
-        receiver_id: receiverId,
-        status: 'pending',
-      });
-
-      if (error) return { success: false, error: error.message };
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err?.message || 'Failed to send friend request' };
-    }
-  }
-
-  /** Accept friend request */
-  public static async acceptFriendRequest(relationshipId: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      const { error } = await supabase
+      // Check if already following
+      const { data: existing, error: selectErr } = await supabase
         .from('friends')
-        .update({ status: 'accepted' })
-        .eq('id', relationshipId);
-
-      if (error) return { success: false, error: error.message };
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err?.message || 'Failed to accept friend request' };
-    }
-  }
-
-  /** Reject or cancel friend request */
-  public static async removeFriend(relationshipId: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      const { error } = await supabase.from('friends').delete().eq('id', relationshipId);
-      if (error) return { success: false, error: error.message };
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err?.message || 'Failed to remove friend' };
-    }
-  }
-
-  /** Add friend directly */
-  public static async addFriend(userId: string, friendId: string): Promise<boolean> {
-    if (!userId || !friendId || userId === friendId) return false;
-    try {
-      const { data: existing } = await supabase
-        .from('friends')
-        .select('*')
-        .or(`and(user_id.eq.${userId},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${userId})`)
+        .select('id')
+        .eq('sender_id', userId)
+        .eq('receiver_id', targetId)
         .maybeSingle();
 
-      if (existing) {
-        if (existing.status !== 'accepted') {
-          await supabase.from('friends').update({ status: 'accepted' }).eq('id', existing.id);
-        }
-        return true;
+      if (selectErr) {
+        console.error('[FriendService] check follow error:', selectErr);
       }
 
-      const { error } = await supabase.from('friends').insert({
-        user_id: userId,
-        friend_id: friendId,
-        status: 'accepted',
-      });
+      if (existing) {
+        // Unfollow
+        const { error: delErr } = await supabase.from('friends').delete().eq('id', existing.id);
+        if (delErr) console.error('[FriendService] unfollow error:', delErr);
+        return false; // Now not following
+      } else {
+        // Follow with explicit client UUID
+        const followId = crypto.randomUUID();
+        const { error: insErr } = await supabase.from('friends').insert({
+          id: followId,
+          sender_id: userId,
+          receiver_id: targetId,
+          status: 'accepted',
+          created_at: new Date().toISOString(),
+        });
+
+        if (insErr) {
+          console.error('[FriendService] follow insert error:', insErr);
+          return false;
+        }
+        return true; // Now following
+      }
+    } catch (err) {
+      console.error('[FriendService] toggleFollow exception:', err);
+      return false;
+    }
+  }
+
+  /** Get list of user IDs that current user is following (receiver_id where sender_id = userId) */
+  public static async getFollowingIds(userId: string): Promise<string[]> {
+    if (!userId) return [];
+    try {
+      const { data, error } = await supabase
+        .from('friends')
+        .select('receiver_id')
+        .eq('sender_id', userId);
 
       if (error) {
-        console.error('[FriendService] addFriend error:', error);
-        return false;
+        console.error('[FriendService] getFollowingIds error:', error);
+        return [];
       }
-      return true;
+      return data ? data.map((d) => d.receiver_id) : [];
     } catch (err) {
-      console.error('[FriendService] addFriend exception:', err);
-      return false;
+      console.error('[FriendService] getFollowingIds exception:', err);
+      return [];
     }
   }
 
-  /** Remove friend */
-  public static async removeFriendByUsers(userId: string, friendId: string): Promise<boolean> {
+  /** Get list of user IDs that follow current user (sender_id where receiver_id = userId) */
+  public static async getFollowerIds(userId: string): Promise<string[]> {
+    if (!userId) return [];
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('friends')
-        .delete()
-        .or(`and(user_id.eq.${userId},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${userId})`);
+        .select('sender_id')
+        .eq('receiver_id', userId);
 
-      return !error;
+      if (error) {
+        console.error('[FriendService] getFollowerIds error:', error);
+        return [];
+      }
+      return data ? data.map((d) => d.sender_id) : [];
     } catch (err) {
-      console.error('[FriendService] removeFriend exception:', err);
-      return false;
+      console.error('[FriendService] getFollowerIds exception:', err);
+      return [];
     }
   }
 
-  /** Get list of friend UserProfiles */
-  public static async getFriendsProfiles(userId: string): Promise<UserProfile[]> {
+  /** Get mutual friends profiles (Saling Follow) */
+  public static async getMutualFriendsProfiles(userId: string): Promise<UserProfile[]> {
+    if (!userId) return [];
     try {
-      const { data: rels } = await supabase
+      // 1. Get users I follow
+      const followingIds = await this.getFollowingIds(userId);
+      if (followingIds.length === 0) return [];
+
+      // 2. Find users from followingIds who also follow me back
+      const { data: followBack, error } = await supabase
         .from('friends')
-        .select('user_id, friend_id')
-        .or(`user_id.eq.${userId},friend_id.eq.${userId}`)
-        .eq('status', 'accepted');
+        .select('sender_id')
+        .eq('receiver_id', userId)
+        .in('sender_id', followingIds);
 
-      if (!rels || rels.length === 0) return [];
+      if (error || !followBack || followBack.length === 0) return [];
+      const mutualIds = followBack.map((f) => f.sender_id);
 
-      const friendIds = rels.map((r) => (r.user_id === userId ? r.friend_id : r.user_id));
+      // 3. Fetch profiles for mutual friends
       const { data: profiles } = await supabase
         .from('profiles')
         .select('*')
-        .in('id', friendIds);
+        .in('id', mutualIds);
 
       return (profiles as UserProfile[]) || [];
     } catch (err) {
-      console.error('[FriendService] getFriendsProfiles error:', err);
+      console.error('[FriendService] getMutualFriendsProfiles exception:', err);
       return [];
     }
   }

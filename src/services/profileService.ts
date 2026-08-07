@@ -35,6 +35,45 @@ export class ProfileService {
   }
 
   /**
+   * Fetches user profile by username from Supabase
+   */
+  public static async getProfileByUsername(username: string): Promise<UserProfile | null> {
+    try {
+      const cleanUsername = username.replace(/^@/, '').trim();
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('username', cleanUsername)
+        .maybeSingle();
+
+      if (error || !data) return null;
+      return data as UserProfile;
+    } catch (err) {
+      console.error('[ProfileService] getProfileByUsername error:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Fetches multiple profiles by array of user IDs
+   */
+  public static async getProfilesByIds(userIds: string[]): Promise<UserProfile[]> {
+    if (!userIds || userIds.length === 0) return [];
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', userIds);
+
+      if (error || !data) return [];
+      return data as UserProfile[];
+    } catch (err) {
+      console.error('[ProfileService] getProfilesByIds error:', err);
+      return [];
+    }
+  }
+
+  /**
    * Ensures a profile exists for the logged in user.
    * If first login, automatically creates a profile with unique username fallback.
    */

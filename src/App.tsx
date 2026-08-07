@@ -29,6 +29,7 @@ import { AudioEngine } from '@/features/player/AudioEngine';
 import { useScanner } from '@/hooks/useScanner';
 import { useWindowsTaskbar } from '@/hooks/useWindowsTaskbar';
 import { useDynamicTheme } from '@/hooks/useDynamicTheme';
+import { useDiscordRPC } from '@/hooks/useDiscordRPC';
 
 export function App() {
   const isAuthCallbackPath = typeof window !== 'undefined' && window.location.pathname.includes('/auth/callback');
@@ -59,6 +60,9 @@ export function App() {
 
   // Dynamic Theme: extract accent color from album art on each track change
   useDynamicTheme();
+
+  // Discord Rich Presence: broadcast playback state to Discord
+  useDiscordRPC();
 
   if (isAuthCallbackPath) {
     return <AuthCallbackPage />;

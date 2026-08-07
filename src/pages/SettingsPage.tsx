@@ -13,11 +13,13 @@ import {
   Download,
   Check,
   Radio,
+  Gamepad2,
 } from 'lucide-react';
 
 import { useNavigate } from 'react-router-dom';
 import { OBSOverlaySection } from '@/components/OBSOverlaySection';
 import { useFollowedPlaylistStore } from '@/stores/useFollowedPlaylistStore';
+import { useDiscordStatus } from '@/hooks/useDiscordRPC';
 
 import logoImg from '@/assets/logo.png';
 
@@ -30,10 +32,13 @@ export function SettingsPage() {
     crossfadeDuration,
     lyricsEnabled,
     seekByLyricsEnabled,
+    discordRpcEnabled,
     updateSettings,
     addMusicFolder,
     removeMusicFolder,
   } = useSettingsStore();
+
+  const { connected: discordConnected } = useDiscordStatus();
 
   const [appVersion, setAppVersion] = useState<string>('2.0.4');
   const [updateStatus, setUpdateStatus] = useState<{ status: string; version?: string; percent?: number; error?: string } | null>(null);
@@ -277,6 +282,39 @@ export function SettingsPage() {
 
         {/* Streaming Playlist Live Sync Section */}
         <StreamingPlaylistSettingsSection />
+
+        {/* Discord Rich Presence */}
+        <SettingsSection title="Discord" icon={Gamepad2}>
+          <ToggleSetting
+            label="Enable Discord Rich Presence"
+            description="Show what you're listening to on your Discord profile"
+            enabled={discordRpcEnabled ?? true}
+            onChange={(v) => {
+              updateSettings({ discordRpcEnabled: v });
+              window.electronAPI?.discord?.setEnabled(v).catch(() => {});
+            }}
+          />
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <p className="text-sm font-medium">Connection Status</p>
+              <p className="text-xs text-text/30">Discord IPC connection state</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                  discordConnected ? 'bg-emerald-400 shadow-[0_0_6px_2px_rgba(52,211,153,0.4)]' : 'bg-red-500'
+                }`}
+              />
+              <span
+                className={`text-xs font-semibold ${
+                  discordConnected ? 'text-emerald-400' : 'text-red-400'
+                }`}
+              >
+                {discordConnected ? 'Connected' : 'Not Running'}
+              </span>
+            </div>
+          </div>
+        </SettingsSection>
 
         {/* About */}
         <div className="glass rounded-2xl p-6 text-center space-y-3">

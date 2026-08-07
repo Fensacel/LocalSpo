@@ -225,6 +225,8 @@ export interface Settings {
   volume: number;
   playbackSpeed: number;
   autoplay?: boolean;
+  /** Whether Discord Rich Presence is enabled (default: true) */
+  discordRpcEnabled?: boolean;
 }
 
 // ─── Enums ──────────────────────────────────────────────

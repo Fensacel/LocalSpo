@@ -27,6 +27,7 @@ const defaultSettings: Settings = {
   volume: 0.8,
   playbackSpeed: 1,
   autoplay: true,
+  discordRpcEnabled: true,
 };
 
 export const useSettingsStore = create<SettingsState>((set, get) => ({
@@ -64,6 +65,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       equalizerBands: updated.equalizerBands,
       volume: updated.volume,
       playbackSpeed: updated.playbackSpeed,
+      discordRpcEnabled: updated.discordRpcEnabled ?? true,
     });
   },
 

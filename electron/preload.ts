@@ -189,6 +189,25 @@ export interface ElectronAPI {
     updateConfig: (newConfig: any) => Promise<any>;
     updateState: (payload: any, localCoverPath?: string | null, remoteCoverUrl?: string | null) => void;
   };
+  // Discord Rich Presence
+  discord: {
+    updatePresence: (payload: {
+      title: string;
+      artist: string;
+      album: string;
+      isPlaying: boolean;
+      currentTime: number;
+      duration: number;
+      sourceType: 'offline' | 'streaming' | 'cache';
+      ytVideoId?: string;
+      sourceName?: string;
+      coverUrl?: string;
+    }) => Promise<void>;
+    clearPresence: () => Promise<void>;
+    getStatus: () => Promise<{ connected: boolean; enabled: boolean }>;
+    setEnabled: (enabled: boolean) => Promise<void>;
+    onStatusChanged: (callback: (data: { connected: boolean }) => void) => () => void;
+  };
 }
 
 const electronAPI: ElectronAPI = {
@@ -365,6 +384,17 @@ const electronAPI: ElectronAPI = {
     updateConfig: (newConfig) => ipcRenderer.invoke('obs:updateConfig', newConfig),
     updateState: (payload, localCoverPath, remoteCoverUrl) =>
       ipcRenderer.send('obs:updateState', payload, localCoverPath, remoteCoverUrl),
+  },
+  discord: {
+    updatePresence: (payload) => ipcRenderer.invoke('discord:updatePresence', payload),
+    clearPresence: () => ipcRenderer.invoke('discord:clearPresence'),
+    getStatus: () => ipcRenderer.invoke('discord:getStatus'),
+    setEnabled: (enabled) => ipcRenderer.invoke('discord:setEnabled', enabled),
+    onStatusChanged: (callback) => {
+      const handler = (_event: unknown, data: { connected: boolean }) => callback(data);
+      ipcRenderer.on('discord:statusChanged', handler);
+      return () => ipcRenderer.removeListener('discord:statusChanged', handler);
+    },
   },
   auth: {
     onDeepLink: (callback) => {
