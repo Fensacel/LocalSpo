@@ -1,10 +1,5 @@
-/**
- * useProfileStore.ts
- * Local user profile & social system store.
- * Persists to profile.json via the existing data:read/data:write IPC.
- */
-
 import { create } from 'zustand';
+import { UserSyncService } from '@/services/userSyncService';
 
 function pathBasename(p: string): string {
   if (!p) return '';
@@ -62,8 +57,9 @@ interface ProfileState {
   profile: UserProfile | null;
   knownUsers: SocialUser[];
   isLoading: boolean;
+  activeUserId: string | null;
 
-  loadProfile: () => Promise<void>;
+  loadProfile: (userId?: string | null) => Promise<void>;
   saveProfile: (updates: Partial<UserProfile>) => Promise<void>;
   updateAvatar: (path: string | null) => Promise<void>;
   updateBanner: (path: string | null) => Promise<void>;
@@ -98,29 +94,41 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   profile: null,
   knownUsers: [],
   isLoading: false,
+  activeUserId: null,
 
-  loadProfile: async () => {
-    set({ isLoading: true });
+  loadProfile: async (userId?: string | null) => {
+    const targetUserId = userId !== undefined ? userId : get().activeUserId;
+    set({ activeUserId: targetUserId, isLoading: true });
+
+    if (!targetUserId) {
+      set({ profile: null, isLoading: false });
+      return;
+    }
+
     try {
-      const data = await window.electronAPI?.data?.read?.('profile.json');
+      const data = await UserSyncService.readData<{ profile?: UserProfile }>(
+        targetUserId,
+        'profile'
+      );
       if (data && data.profile) {
         set({ profile: { ...DEFAULT_PROFILE, ...data.profile } });
       } else {
-        set({ profile: DEFAULT_PROFILE });
+        set({ profile: { ...DEFAULT_PROFILE, id: targetUserId } });
       }
     } catch {
-      set({ profile: DEFAULT_PROFILE });
+      set({ profile: { ...DEFAULT_PROFILE, id: targetUserId } });
     } finally {
       set({ isLoading: false });
     }
   },
 
   saveProfile: async (updates) => {
+    const { activeUserId } = get();
     const current = get().profile ?? DEFAULT_PROFILE;
     const updated = { ...current, ...updates };
     set({ profile: updated });
     try {
-      await window.electronAPI?.data?.write?.('profile.json', { profile: updated });
+      await UserSyncService.writeData(activeUserId, 'profile', { profile: updated });
     } catch (err) {
       console.error('[ProfileStore] Failed to save profile:', err);
     }

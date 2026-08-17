@@ -34,7 +34,7 @@ export function HomePage() {
   // Load history entries on mount
   useEffect(() => {
     loadHistory();
-  }, [loadHistory]);
+  }, []);
 
   // Dynamic Hero Banner Data: Prioritize currently playing/active song, fallback to featured track or local song
   const heroDisplayTrack = useMemo(() => {

@@ -9,6 +9,7 @@ import {
   Pause,
   Heart,
   Shuffle,
+  Sparkles,
   Download,
   ListPlus,
   Loader2,
@@ -312,13 +313,24 @@ export function AlbumDetailPage() {
               <button
                 onClick={toggleShuffle}
                 className={`p-3 rounded-xl border transition-all cursor-pointer ${
-                  shuffleMode === 'on'
+                  shuffleMode !== 'off'
                     ? 'bg-[#0070F3]/20 border-[#0070F3] text-[#0070F3]'
                     : 'bg-white/5 border-white/10 text-[#8B90A0] hover:text-white'
                 }`}
-                title="Toggle Shuffle"
+                title={
+                  shuffleMode === 'off'
+                    ? 'Enable Shuffle'
+                    : shuffleMode === 'on'
+                    ? 'Enable Smart Shuffle ✨'
+                    : 'Disable Shuffle'
+                }
               >
-                <Shuffle size={18} />
+                <div className="relative flex items-center justify-center">
+                  <Shuffle size={18} />
+                  {shuffleMode === 'smart' && (
+                    <Sparkles size={10} className="absolute -top-1.5 -right-2 text-[#0070F3] fill-current animate-pulse" />
+                  )}
+                </div>
               </button>
 
               <button

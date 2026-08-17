@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Check, ListMusic, ListPlus, Plus, ChevronRight, Trash2, Tag, Info } from 'lucide-react';
+import { Heart, Check, ListMusic, ListPlus, Plus, ChevronRight, Trash2, Tag, Info, Radio } from 'lucide-react';
 import { usePlaylistStore, useFavoritesStore, usePlayerStore, useToastStore } from '@/stores';
+import { useJamStore } from '@/stores/useJamStore';
 import type { Song } from '@/types';
 
 interface SongContextMenuProps {
@@ -257,6 +258,22 @@ export function SongContextMenu({ song, x, y, onClose, onRemoveFromPlaylist, onR
         <ListPlus size={14} className="text-text/50" />
         <span>Add to queue</span>
       </button>
+
+      {/* Add to Jam Queue */}
+      {useJamStore.getState().jamCode && (
+        <button
+          onClick={() => {
+            useJamStore.getState().broadcastQueueSong(song);
+            usePlayerStore.getState().addToQueue(song);
+            useToastStore.getState().showToast('Ditambahkan ke Jam Queue ✨', 'success');
+            onClose();
+          }}
+          className="w-full flex items-center gap-2 px-3 py-2 hover:bg-[#0070F3]/15 text-[#0070F3] font-semibold transition-colors text-left"
+        >
+          <Radio size={14} className="animate-pulse" />
+          <span>Add to Jam Queue ✨</span>
+        </button>
+      )}
 
       {/* Edit Track Info & Tags */}
       {onEditSong && (

@@ -46,7 +46,7 @@ export function Sidebar() {
       initial={{ x: -20, opacity: 0 }}
       animate={{ x: 0, opacity: 1 }}
       transition={{ duration: 0.25, ease: 'easeOut' }}
-      className="w-[260px] h-full bg-[#0B0B0D] hidden md:flex flex-col shrink-0 z-40 select-none border-r border-white/5 pb-[96px]"
+      className="w-[260px] h-full bg-[#0B0B0D] hidden md:flex flex-col shrink-0 z-40 select-none border-r border-white/5 pb-[110px]"
     >
       {/* Brand Header */}
       <div className="px-5 pt-4 pb-3 flex items-center justify-between">

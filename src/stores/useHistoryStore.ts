@@ -1,11 +1,12 @@
 import { create } from 'zustand';
 import type { Song, HistoryEntry } from '@/types';
-import { platformService } from '@/platform';
+import { UserSyncService } from '@/services/userSyncService';
 
 interface HistoryState {
   entries: HistoryEntry[];
   isLoaded: boolean;
-  loadHistory: () => Promise<void>;
+  activeUserId: string | null;
+  loadHistory: (userId?: string | null) => Promise<void>;
   addHistoryEntry: (song: Song) => Promise<void>;
   clearHistory: () => Promise<void>;
   removeFromHistory: (songId: string) => Promise<void>;
@@ -14,12 +15,18 @@ interface HistoryState {
 export const useHistoryStore = create<HistoryState>((set, get) => ({
   entries: [],
   isLoaded: false,
+  activeUserId: null,
 
-  loadHistory: async () => {
+  loadHistory: async (userId?: string | null) => {
+    const targetUserId = userId !== undefined ? userId : get().activeUserId;
+    set({ activeUserId: targetUserId });
+
     try {
-      const data = (await platformService.data.read('history.json')) as {
-        entries: HistoryEntry[];
-      } | null;
+      const data = await UserSyncService.readData<{ entries: HistoryEntry[] }>(
+        targetUserId,
+        'history'
+      );
+
       if (data && Array.isArray(data.entries)) {
         set({ entries: data.entries, isLoaded: true });
       } else {
@@ -31,7 +38,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   },
 
   addHistoryEntry: async (song) => {
-    const { entries } = get();
+    const { entries, activeUserId } = get();
     const now = Date.now();
 
     // Prevent duplicate entry if the most recent history entry is for the same song within 60 seconds
@@ -52,19 +59,20 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
 
     const updatedEntries = [newEntry, ...entries].slice(0, 1000);
     set({ entries: updatedEntries });
-    await platformService.data.write('history.json', { entries: updatedEntries });
+    await UserSyncService.writeData(activeUserId, 'history', { entries: updatedEntries });
   },
 
   clearHistory: async () => {
+    const { activeUserId } = get();
     set({ entries: [] });
-    await platformService.data.write('history.json', { entries: [] });
+    await UserSyncService.writeData(activeUserId, 'history', { entries: [] });
   },
 
   removeFromHistory: async (songId: string) => {
-    const { entries } = get();
+    const { entries, activeUserId } = get();
     const updatedEntries = entries.filter((e) => e.songId !== songId);
     set({ entries: updatedEntries });
-    await platformService.data.write('history.json', { entries: updatedEntries });
+    await UserSyncService.writeData(activeUserId, 'history', { entries: updatedEntries });
   },
 }));
 

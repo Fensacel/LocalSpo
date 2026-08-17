@@ -34,6 +34,10 @@ export interface ElectronAPI {
     getDataPath: () => Promise<string>;
     getUserDataPath: () => Promise<string>;
   };
+  // Romanization
+  romanize: {
+    japanese: (text: string) => Promise<string | null>;
+  };
   // Updater
   updater: {
     check: () => Promise<unknown>;
@@ -100,6 +104,7 @@ export interface ElectronAPI {
       title?: string,
       album?: string,
       duration?: number,
+      forceRefresh?: boolean
     ) => Promise<{ source: string; content: string } | null>;
   };
   // Downloader
@@ -268,8 +273,8 @@ const electronAPI: ElectronAPI = {
     },
   },
   lyrics: {
-    read: (songId, audioPath, lrcPath, hasEmbeddedLyrics, artist, title, album, duration) =>
-      ipcRenderer.invoke('lyrics:read', songId, audioPath, lrcPath, hasEmbeddedLyrics, artist, title, album, duration),
+    read: (songId, audioPath, lrcPath, hasEmbeddedLyrics, artist, title, album, duration, forceRefresh) =>
+      ipcRenderer.invoke('lyrics:read', songId, audioPath, lrcPath, hasEmbeddedLyrics, artist, title, album, duration, forceRefresh),
   },
   downloader: {
     downloadSpotify: (url) => ipcRenderer.invoke('downloader:downloadSpotify', url),
@@ -409,6 +414,9 @@ const electronAPI: ElectronAPI = {
   profile: {
     uploadAvatar: (filePath?: string) => ipcRenderer.invoke('profile:uploadAvatar', filePath),
     uploadBanner: (filePath?: string) => ipcRenderer.invoke('profile:uploadBanner', filePath),
+  },
+  romanize: {
+    japanese: (text: string) => ipcRenderer.invoke('romanize:japanese', text),
   },
 };
 

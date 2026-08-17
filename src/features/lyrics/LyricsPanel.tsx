@@ -1,9 +1,10 @@
-import { useEffect, useState, useRef, useMemo } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { usePlayerStore, useSettingsStore } from '@/stores';
 import { motion, AnimatePresence } from 'framer-motion';
 import { parseLyrics, findCurrentLyricIndex } from '@/services/lyricsParser';
 import type { LyricsData } from '@/types';
-import { FileText, Music } from 'lucide-react';
+import { FileText, Music, RotateCw } from 'lucide-react';
+import { platformService } from '@/platform';
 
 import { RomanizationService } from '@/modules/romanization/RomanizationService';
 
@@ -15,65 +16,60 @@ export function LyricsPanel() {
   const containerRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
-  // Load lyrics when song changes
-  useEffect(() => {
+  const fetchLyricsData = useCallback(async (forceRefresh = false) => {
     if (!currentSong) {
       setLyrics(null);
       return;
     }
 
-    let cancelled = false;
+    setIsLoading(true);
     lineRefs.current.clear();
 
-    const loadLyrics = async () => {
-      setIsLoading(true);
-      setLyrics(null);
+    try {
+      const timeoutPromise = new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), 15000)
+      );
 
-      try {
-        const timeoutPromise = new Promise<null>((resolve) =>
-          setTimeout(() => resolve(null), 15000)
-        );
-
-        const result = await Promise.race([
-          window.electronAPI.lyrics.read(
-            currentSong.id,
-            currentSong.path,
-            currentSong.lrcPath,
-            currentSong.hasEmbeddedLyrics,
-            currentSong.artist,
-            currentSong.title,
-            currentSong.album,
-            currentSong.duration
-          ),
-          timeoutPromise,
-        ]);
-
-        if (cancelled) return;
-
-        if (result && result.content) {
-          const parsed = parseLyrics(result.content, currentSong.artist);
-          setLyrics(parsed);
-          RomanizationService.clearCache(currentSong.id);
-          RomanizationService.processLyrics(parsed, currentSong.id, true).then((processed) => {
-            if (!cancelled && processed) setLyrics(processed);
-          });
-        } else {
-          setLyrics(null);
-        }
-      } catch {
-        if (!cancelled) setLyrics(null);
-      } finally {
-        if (!cancelled) setIsLoading(false);
+      const readFn = platformService.lyrics?.read || window.electronAPI?.lyrics?.read;
+      if (!readFn) {
+        setIsLoading(false);
+        return;
       }
-    };
 
+      const result = await Promise.race([
+        readFn(
+          currentSong.id,
+          currentSong.path,
+          currentSong.lrcPath,
+          currentSong.hasEmbeddedLyrics,
+          currentSong.artist,
+          currentSong.title,
+          currentSong.album,
+          currentSong.duration,
+          forceRefresh
+        ),
+        timeoutPromise,
+      ]);
 
-    loadLyrics();
+      if (result && result.content) {
+        const parsed = parseLyrics(result.content, currentSong.artist);
+        RomanizationService.clearCache(currentSong.id);
+        const processed = await RomanizationService.processLyrics(parsed, currentSong.id, true);
+        setLyrics(processed || parsed);
+      } else {
+        setLyrics(null);
+      }
+    } catch {
+      setLyrics(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentSong]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [currentSong?.id]);
+  // Load lyrics when song changes
+  useEffect(() => {
+    fetchLyricsData(false);
+  }, [currentSong?.id, fetchLyricsData]);
 
   // Find current lyric index
   const currentIndex = useMemo(() => {
@@ -113,9 +109,21 @@ export function LyricsPanel() {
         className="w-[400px] h-full glass-heavy flex flex-col shrink-0"
       >
         {/* Header */}
-        <div className="px-5 py-4 border-b border-white/5 flex items-center gap-2">
-          <FileText size={16} className="text-primary" />
-          <span className="text-sm font-semibold text-text/70">Lyrics</span>
+        <div className="px-5 py-4 border-b border-white/5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileText size={16} className="text-primary" />
+            <span className="text-sm font-semibold text-text/70">Lyrics</span>
+          </div>
+          {currentSong && (
+            <button
+              onClick={() => fetchLyricsData(true)}
+              disabled={isLoading}
+              title="Refetch / Refresh Lyrics"
+              className="p-1.5 rounded-lg text-text/40 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30"
+            >
+              <RotateCw size={14} className={isLoading ? 'animate-spin' : ''} />
+            </button>
+          )}
         </div>
 
         {/* Lyrics content */}

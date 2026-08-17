@@ -12,6 +12,7 @@ import {
   SkipBack,
   SkipForward,
   Shuffle,
+  Sparkles,
   Repeat,
   Repeat1,
   Minimize2,
@@ -419,11 +420,23 @@ export function NowPlayingOverlay() {
               <motion.button
                 whileTap={{ scale: 0.88 }}
                 onClick={() => toggleShuffle()}
+                title={
+                  shuffleMode === 'off'
+                    ? 'Enable Shuffle'
+                    : shuffleMode === 'on'
+                    ? 'Enable Smart Shuffle ✨'
+                    : 'Disable Shuffle'
+                }
                 className={`transition-all duration-200 ${
-                  shuffleMode === 'on' ? 'text-white' : 'text-white/25 hover:text-white/55'
+                  shuffleMode !== 'off' ? 'text-white' : 'text-white/25 hover:text-white/55'
                 }`}
               >
-                <Shuffle size={19} />
+                <div className="relative flex items-center justify-center">
+                  <Shuffle size={19} />
+                  {shuffleMode === 'smart' && (
+                    <Sparkles size={11} className="absolute -top-1.5 -right-2 text-[#0070F3] fill-current animate-pulse" />
+                  )}
+                </div>
               </motion.button>
 
               <motion.button

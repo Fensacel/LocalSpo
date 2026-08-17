@@ -59,11 +59,9 @@ export function NowPlayingPanel({ onClose }: NowPlayingPanelProps) {
 
         if (result && result.content) {
           const parsed = parseLyrics(result.content, currentSong.artist);
-          setLyrics(parsed);
           RomanizationService.clearCache(currentSong.id);
-          RomanizationService.processLyrics(parsed, currentSong.id, true).then((processed) => {
-            if (!cancelled && processed) setLyrics(processed);
-          });
+          const processed = await RomanizationService.processLyrics(parsed, currentSong.id, true);
+          if (!cancelled) setLyrics(processed || parsed);
         }
       } catch (err) {
         console.warn('[NowPlayingPanel] Failed to load lyrics:', err);

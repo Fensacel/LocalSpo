@@ -4,6 +4,12 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { AuthService } from '@/services/authService';
 import { ProfileService, type UserProfile } from '@/services/profileService';
 
+import { usePlaylistStore } from '@/stores/usePlaylistStore';
+import { useHistoryStore } from '@/stores/useHistoryStore';
+import { useFavoritesStore } from '@/stores/useFavoritesStore';
+import { useStatsStore } from '@/stores/useStatsStore';
+import { useProfileStore } from '@/stores/useProfileStore';
+
 export interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
@@ -18,6 +24,23 @@ export interface AuthContextType {
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+let lastSyncedUserId: string | null | undefined = undefined;
+
+function syncStoresForUser(userId: string | null) {
+  if (lastSyncedUserId === userId) return;
+  lastSyncedUserId = userId;
+
+  Promise.all([
+    usePlaylistStore.getState().loadPlaylists(userId),
+    useHistoryStore.getState().loadHistory(userId),
+    useFavoritesStore.getState().loadFavorites(userId),
+    useStatsStore.getState().loadStats(userId),
+    useProfileStore.getState().loadProfile(userId),
+  ]).catch((err) => {
+    console.warn('[AuthProvider] syncStoresForUser error:', err);
+  });
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -50,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function initAuth() {
       if (!isSupabaseConfigured) {
+        syncStoresForUser(null);
         if (isMounted) setLoading(false);
         return;
       }
@@ -59,12 +83,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (isMounted) {
           setSession(initialSession);
           setUser(initialSession?.user || null);
+          const userId = initialSession?.user?.id || null;
+          syncStoresForUser(userId);
           if (initialSession?.user) {
             await loadUserProfile(initialSession.user);
           }
         }
       } catch (err: any) {
         console.error('[AuthProvider] initAuth error:', err);
+        syncStoresForUser(null);
       } finally {
         if (isMounted) setLoading(false);
       }
@@ -79,6 +106,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       setSession(newSession);
       setUser(newSession?.user || null);
+
+      const userId = newSession?.user?.id || null;
+      syncStoresForUser(userId);
 
       if (newSession?.user) {
         await loadUserProfile(newSession.user);

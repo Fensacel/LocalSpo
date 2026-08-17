@@ -87,7 +87,7 @@ export function MainLayout() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -6 }}
                 transition={{ duration: 0.18, ease: 'easeOut' }}
-                className="p-4 pb-[130px] md:p-6 md:pb-[140px]"
+                className="p-4 pb-[160px] md:p-6 md:pb-[180px]"
               >
                 <Outlet />
               </motion.div>

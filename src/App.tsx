@@ -20,6 +20,7 @@ import { StatsPage } from '@/pages/StatsPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { AuthCallbackPage } from '@/pages/AuthCallbackPage';
 import { AuthProvider } from '@/providers/AuthProvider';
+import { StartupAuthModal } from '@/components/StartupAuthModal';
 import { useSettingsStore, useFavoritesStore, useHistoryStore, usePlaylistStore } from '@/stores';
 import { useProfileStore } from '@/stores/useProfileStore';
 import { useStatsStore } from '@/stores/useStatsStore';
@@ -70,6 +71,7 @@ export function App() {
 
   return (
     <AuthProvider>
+      <StartupAuthModal />
       <HashRouter>
         <AudioEngine />
         <Routes>

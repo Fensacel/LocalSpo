@@ -108,6 +108,14 @@ export function LoginPage() {
             )}
           </button>
 
+          <button
+            type="button"
+            onClick={() => navigate('/', { replace: true })}
+            className="w-full py-3 px-5 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white rounded-2xl font-semibold text-sm transition-all duration-200"
+          >
+            Lanjut sebagai Guest
+          </button>
+
           <p className="text-[11px] text-white/40 leading-normal">
             By continuing you agree to LocalSpo Terms of Service & Privacy Policy.
           </p>

@@ -32,6 +32,7 @@ export interface Song {
   addedAt: number;
   playCount: number;
   isUserQueued?: boolean;
+  isSmartRecommended?: boolean;
 
   // Extended ID3 Metadata
   composer?: string;
@@ -233,7 +234,7 @@ export interface Settings {
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
-export type ShuffleMode = 'off' | 'on';
+export type ShuffleMode = 'off' | 'on' | 'smart';
 
 export type SleepTimerMode = 'off' | 'time' | 'songs' | 'end_of_playlist';
 export type SleepTimerOption = 'off' | '15m' | '30m' | '45m' | '1h' | 'end_of_song' | 'end_of_playlist';

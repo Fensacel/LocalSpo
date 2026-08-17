@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquare,
@@ -12,6 +13,7 @@ import {
   UserCheck,
   Music,
   CheckCircle,
+  LogIn,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -30,7 +32,7 @@ interface SocialChatDrawerProps {
 
 export function SocialChatDrawer({ isOpen, onClose, initialUserId }: SocialChatDrawerProps) {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, profile, signInWithGoogle } = useAuth();
   const currentSong = usePlayerStore((s) => s.currentSong);
 
   const handleViewProfile = (e: React.MouseEvent, username?: string | null, userId?: string) => {
@@ -59,6 +61,8 @@ export function SocialChatDrawer({ isOpen, onClose, initialUserId }: SocialChatD
 
   const [conversations, setConversations] = useState<UserConversationItem[]>([]);
   const [isLoadingConversations, setIsLoadingConversations] = useState<boolean>(false);
+
+  const isValidUuid = (id?: string | null) => Boolean(id && id.length === 36 && id.includes('-'));
 
   const fetchConversations = useCallback(async () => {
     const currentUserId = user?.id || (isValidUuid(profile?.id) ? profile?.id : null);
@@ -136,8 +140,6 @@ export function SocialChatDrawer({ isOpen, onClose, initialUserId }: SocialChatD
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const isValidUuid = (id?: string | null) => Boolean(id && id.length === 36 && id.includes('-'));
-
   const startChatWithUser = async (targetUserId: string, targetName?: string, targetAvatar?: string | null) => {
     const currentUserId = user?.id || (isValidUuid(profile?.id) ? profile?.id : null);
 
@@ -207,9 +209,9 @@ export function SocialChatDrawer({ isOpen, onClose, initialUserId }: SocialChatD
 
   if (!isOpen) return null;
 
-  return (
+  return createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex justify-end bg-black/60 backdrop-blur-md">
+      <div className="fixed inset-0 z-[9999] flex justify-end bg-black/60 backdrop-blur-md">
         <motion.div
           initial={{ x: '100%' }}
           animate={{ x: 0 }}
@@ -241,7 +243,28 @@ export function SocialChatDrawer({ isOpen, onClose, initialUserId }: SocialChatD
             </button>
           </div>
 
-          {/* Navigation Tabs */}
+          {!user ? (
+            <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-4 bg-[#121319]">
+              <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                <MessageSquare size={28} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Login untuk Chat</h3>
+                <p className="text-xs text-gray-400 mt-1.5 max-w-xs leading-relaxed">
+                  Fitur obrolan & sosial komunitas memerlukan akun. Silakan login dengan Google untuk mulai mengobrol dengan pendengar lainnya.
+                </p>
+              </div>
+              <button
+                onClick={signInWithGoogle}
+                className="py-2.5 px-5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold flex items-center gap-2 shadow-lg shadow-blue-600/25 transition-all transform active:scale-95 cursor-pointer"
+              >
+                <LogIn size={16} />
+                <span>Login dengan Google</span>
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Navigation Tabs */}
           <div className="flex border-b border-white/10 bg-[#141419] p-1.5 gap-1">
             <button
               type="button"
@@ -662,10 +685,13 @@ export function SocialChatDrawer({ isOpen, onClose, initialUserId }: SocialChatD
                   )}
                 </div>
               </div>
-            )
-          )}
+              )
+            )}
+          </>
+        )}
         </motion.div>
       </div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

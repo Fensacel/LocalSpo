@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { usePlayerStore } from './usePlayerStore';
 import { parseLyrics, findCurrentLyricIndex } from '@/services/lyricsParser';
+import { LyricOffsetStore } from '@/services/lyricOffsetStore';
 import type { LyricsData } from '@/types';
 
 export interface OBSOverlayConfig {
@@ -79,25 +80,28 @@ let activeLyricsSongId: string | null = null;
 let activeParsedLyrics: LyricsData | null = null;
 
 async function fetchLyricsForSong(song: any) {
-  if (!song || !window.electronAPI?.lyrics?.read) return;
+  if (!song) return;
   if (activeLyricsSongId === song.id) return;
 
   activeLyricsSongId = song.id;
   activeParsedLyrics = null;
 
   try {
-    const res = await window.electronAPI.lyrics.read(
-      song.id,
-      song.path || '',
-      song.lrcPath || null,
-      !!song.hasEmbeddedLyrics,
-      song.artist,
-      song.title,
-      song.album,
-      song.duration
-    );
-    if (res && res.content) {
-      activeParsedLyrics = parseLyrics(res.content, song.artist);
+    if (window.electronAPI?.lyrics?.read) {
+      const res = await window.electronAPI.lyrics.read(
+        song.id,
+        song.path || '',
+        song.lrcPath || null,
+        !!song.hasEmbeddedLyrics,
+        song.artist,
+        song.title,
+        song.album,
+        song.duration
+      );
+      if (res && res.content) {
+        activeParsedLyrics = parseLyrics(res.content, song.artist);
+        useObsStore.getState().syncPlayerState();
+      }
     }
   } catch (e) {
     activeParsedLyrics = null;
@@ -208,13 +212,19 @@ export const useObsStore = create<OBSStoreState>((set, get) => ({
     let currentLyric = '';
     let nextLyric = '';
 
-    if (activeParsedLyrics && activeParsedLyrics.synced && activeParsedLyrics.lines.length > 0) {
-      const idx = findCurrentLyricIndex(activeParsedLyrics.lines, playerState.currentTime);
-      if (idx >= 0) {
-        currentLyric = activeParsedLyrics.lines[idx].text;
-        if (idx + 1 < activeParsedLyrics.lines.length) {
-          nextLyric = activeParsedLyrics.lines[idx + 1].text;
+    if (activeParsedLyrics && activeParsedLyrics.lines.length > 0) {
+      if (activeParsedLyrics.synced) {
+        const offset = LyricOffsetStore.getOffset(currentSong?.id || '');
+        const adjustedTime = Math.max(0, playerState.currentTime + offset);
+        const idx = findCurrentLyricIndex(activeParsedLyrics.lines, adjustedTime);
+        if (idx >= 0) {
+          currentLyric = activeParsedLyrics.lines[idx].text;
+          if (idx + 1 < activeParsedLyrics.lines.length) {
+            nextLyric = activeParsedLyrics.lines[idx + 1].text;
+          }
         }
+      } else {
+        currentLyric = activeParsedLyrics.lines[0]?.text || '';
       }
     }
 

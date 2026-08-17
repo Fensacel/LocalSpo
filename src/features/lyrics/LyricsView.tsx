@@ -54,11 +54,9 @@ export function LyricsView() {
 
         if (result && result.content) {
           const parsed = parseLyrics(result.content, currentSong.artist);
-          setLyrics(parsed);
           RomanizationService.clearCache(currentSong.id);
-          RomanizationService.processLyrics(parsed, currentSong.id, true).then((processed) => {
-            if (!cancelled && processed) setLyrics(processed);
-          });
+          const processed = await RomanizationService.processLyrics(parsed, currentSong.id, true);
+          if (!cancelled) setLyrics(processed || parsed);
         } else {
           console.warn('[LyricsView] No lyrics result returned for:', currentSong.artist, currentSong.title);
           setLyrics(null);
@@ -100,10 +98,9 @@ export function LyricsView() {
       );
       if (result && result.content) {
         const parsed = parseLyrics(result.content, currentSong.artist);
-        setLyrics(parsed);
         RomanizationService.clearCache(currentSong.id);
         const processed = await RomanizationService.processLyrics(parsed, currentSong.id, true);
-        if (processed) setLyrics(processed);
+        setLyrics(processed || parsed);
       }
     } catch (err) {
       console.error('Refresh lyrics error:', err);

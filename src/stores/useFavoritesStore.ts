@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import type { FavoritesData } from '@/types';
-import { platformService } from '@/platform';
+import { UserSyncService } from '@/services/userSyncService';
+import { useToastStore } from './useToastStore';
 
 interface FavoritesState extends FavoritesData {
   isLoaded: boolean;
-  loadFavorites: () => Promise<void>;
+  activeUserId: string | null;
+  loadFavorites: (userId?: string | null) => Promise<void>;
   toggleFavoriteSong: (songId: string) => Promise<void>;
   toggleFavoriteAlbum: (albumId: string) => Promise<void>;
   toggleFavoriteArtist: (artistId: string) => Promise<void>;
@@ -22,10 +24,18 @@ const defaultFavorites: FavoritesData = {
 export const useFavoritesStore = create<FavoritesState>((set, get) => ({
   ...defaultFavorites,
   isLoaded: false,
+  activeUserId: null,
 
-  loadFavorites: async () => {
+  loadFavorites: async (userId?: string | null) => {
+    const targetUserId = userId !== undefined ? userId : get().activeUserId;
+    set({ activeUserId: targetUserId });
+
     try {
-      const data = (await platformService.data.read('favorites.json')) as FavoritesData | null;
+      const data = await UserSyncService.readData<FavoritesData>(
+        targetUserId,
+        'favorites'
+      );
+
       if (data) {
         set({
           songIds: data.songIds || [],
@@ -42,12 +52,12 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
   },
 
   toggleFavoriteSong: async (songId) => {
-    const { songIds, albumIds, artistIds } = get();
+    const { songIds, albumIds, artistIds, activeUserId } = get();
     const isFav = songIds.includes(songId);
     const newSongIds = isFav ? songIds.filter((id) => id !== songId) : [...songIds, songId];
 
     set({ songIds: newSongIds });
-    await platformService.data.write('favorites.json', {
+    await UserSyncService.writeData(activeUserId, 'favorites', {
       songIds: newSongIds,
       albumIds,
       artistIds,
@@ -60,12 +70,12 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
   },
 
   toggleFavoriteAlbum: async (albumId) => {
-    const { songIds, albumIds, artistIds } = get();
+    const { songIds, albumIds, artistIds, activeUserId } = get();
     const isFav = albumIds.includes(albumId);
     const newAlbumIds = isFav ? albumIds.filter((id) => id !== albumId) : [...albumIds, albumId];
 
     set({ albumIds: newAlbumIds });
-    await platformService.data.write('favorites.json', {
+    await UserSyncService.writeData(activeUserId, 'favorites', {
       songIds,
       albumIds: newAlbumIds,
       artistIds,
@@ -78,14 +88,14 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
   },
 
   toggleFavoriteArtist: async (artistId) => {
-    const { songIds, albumIds, artistIds } = get();
+    const { songIds, albumIds, artistIds, activeUserId } = get();
     const isFav = artistIds.includes(artistId);
     const newArtistIds = isFav
       ? artistIds.filter((id) => id !== artistId)
       : [...artistIds, artistId];
 
     set({ artistIds: newArtistIds });
-    await platformService.data.write('favorites.json', {
+    await UserSyncService.writeData(activeUserId, 'favorites', {
       songIds,
       albumIds,
       artistIds: newArtistIds,
@@ -101,5 +111,3 @@ export const useFavoritesStore = create<FavoritesState>((set, get) => ({
   isFavoriteAlbum: (albumId) => get().albumIds.includes(albumId),
   isFavoriteArtist: (artistId) => get().artistIds.includes(artistId),
 }));
-
-import { useToastStore } from './useToastStore';

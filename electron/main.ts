@@ -45,6 +45,7 @@ try {
 import { registerDownloaderIpc } from './ipc/downloaderIpc';
 import { registerPlaylistSyncIpc } from './ipc/playlistSyncIpc';
 import { registerStreamingIpc } from './ipc/streamingIpc';
+import { registerRomanizeIpc } from './ipc/romanizeIpc';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -766,6 +767,7 @@ app.whenReady().then(async () => {
   registerStreamingIpc(getDataPath, () => mainWindow);
   registerOBSIpc(getDataPath);
   registerTaskbarIpc(() => mainWindow);
+  registerRomanizeIpc();
 
   // Discord Rich Presence – register IPC bridge and auto-connect
   registerDiscordIpc(getDiscordClientId, () => mainWindow);

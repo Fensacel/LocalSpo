@@ -1,5 +1,5 @@
 import { useFavoritesStore, useLibraryStore, usePlayerStore } from '@/stores';
-import { Heart, Play, Pause, Music, Shuffle } from 'lucide-react';
+import { Heart, Play, Pause, Music, Shuffle, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { formatTime } from '@/utils';
 import type { Song } from '@/types';
@@ -75,14 +75,25 @@ export function FavoritesPage() {
               whileTap={{ scale: 0.9 }}
               onClick={handleShuffleToggle}
               className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer ${
-                shuffleMode === 'on'
+                shuffleMode !== 'off'
                   ? 'text-primary hover:text-primary-hover'
                   : 'text-text/50 hover:text-white'
               }`}
-              title={shuffleMode === 'on' ? 'Disable shuffle' : 'Enable shuffle'}
+              title={
+                shuffleMode === 'off'
+                  ? 'Enable Shuffle'
+                  : shuffleMode === 'on'
+                  ? 'Enable Smart Shuffle ✨'
+                  : 'Disable Shuffle'
+              }
             >
-              <Shuffle size={22} />
-              {shuffleMode === 'on' && (
+              <div className="relative flex items-center justify-center">
+                <Shuffle size={22} />
+                {shuffleMode === 'smart' && (
+                  <Sparkles size={11} className="absolute -top-1.5 -right-2 text-primary fill-current animate-pulse" />
+                )}
+              </div>
+              {shuffleMode !== 'off' && (
                 <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-primary" />
               )}
             </motion.button>

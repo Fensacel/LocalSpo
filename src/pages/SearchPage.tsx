@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLibraryStore, usePlayerStore, useToastStore, useStreamingStore, usePlaylistStore } from '@/stores';
 import { useProfileStore } from '@/stores/useProfileStore';
 import { useSpotifyStore } from '@/modules/downloader/stores/useSpotifyStore';
@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 import { formatTime, getImageUrl } from '@/utils';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createStreamSong } from '@/types/music';
 import type { SpotifySearchTrack } from '@/modules/downloader/types';
 import { SongContextMenu } from '@/components/SongContextMenu';
@@ -28,7 +28,8 @@ import type { Song } from '@/types';
 import { SafeAvatar, SafeImage } from '@/components/SafeImage';
 
 export function SearchPage() {
-  const { searchQuery, searchResults, isSearching } = useSpotifyStore();
+  const [searchParams] = useSearchParams();
+  const { searchQuery, setSearchQuery, search, searchResults, isSearching } = useSpotifyStore();
   const { songs: localSongs, albums: localAlbums, artists: localArtists } = useLibraryStore();
   const { playlists } = usePlaylistStore();
   const { knownUsers, profile } = useProfileStore();
@@ -36,6 +37,16 @@ export function SearchPage() {
   const { downloadUrl } = useDownloaderStore();
   const { showToast } = useToastStore();
   const navigate = useNavigate();
+
+  const queryParam = searchParams.get('q');
+
+  useEffect(() => {
+    if (queryParam && queryParam.trim() && queryParam !== searchQuery) {
+      const trimmed = queryParam.trim();
+      setSearchQuery(trimmed);
+      search(trimmed);
+    }
+  }, [queryParam, searchQuery, setSearchQuery, search]);
 
   const [activeTab, setActiveTab] = useState<'all' | 'online' | 'local'>('all');
   const [contextMenu, setContextMenu] = useState<{ song: Song; x: number; y: number } | null>(null);

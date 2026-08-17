@@ -7,6 +7,16 @@ export interface LyricsResult {
 export class LyricsApi {
   private static musixmatchToken: string | null = null;
 
+  private static normalizeStr(str: string): string {
+    return str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   private static cleanArtist(artist: string): string {
     if (!artist) return '';
     let a = artist
@@ -38,6 +48,8 @@ export class LyricsApi {
       .replace(/["'“”„]/g, '')
       .replace(/\[(MV|M\/V|Official Video|Official Audio|Lyric Video|Audio|Lyrics|Performance Video)\]/gi, '')
       .replace(/\((Official Video|Official Audio|Lyric Video|Audio|M\/V|MV|Lyrics|Performance Video)\)/gi, '')
+      .replace(/\((.*?)(ver|version|remix|mix|edit|acoustic|live|instrumental|speed|slowed)(.*?)\)/gi, '')
+      .replace(/\[(.*?)(ver|version|remix|mix|edit|acoustic|live|instrumental|speed|slowed)(.*?)\]/gi, '')
       .replace(/\(feat\..*?\)/gi, '')
       .replace(/\[feat\..*?\]/gi, '')
       .replace(/feat\..*$/gi, '')
@@ -48,10 +60,45 @@ export class LyricsApi {
     return t;
   }
 
-  private static isArtistMatch(candidateArtist: string | undefined, targetArtist: string): boolean {
+  public static isTitleMatch(candidateTitle: string | undefined, targetTitle: string): boolean {
+    if (!candidateTitle || !targetTitle) return false;
+
+    const cClean = this.cleanTitle(candidateTitle);
+    const tClean = this.cleanTitle(targetTitle);
+
+    const cNorm = this.normalizeStr(cClean);
+    const tNorm = this.normalizeStr(tClean);
+
+    if (cNorm === tNorm) return true;
+
+    const cWords = cNorm.split(' ').filter((w) => w.length > 0);
+    const tWords = tNorm.split(' ').filter((w) => w.length > 0);
+
+    if (cWords.length === 0 || tWords.length === 0) return false;
+
+    const filterIgnored = (words: string[]) =>
+      words.filter(
+        (w) => !['live', 'remix', 'version', 'acoustic', 'edit', 'audio', 'video', 'instrumental', 'ver', 'rock'].includes(w)
+      );
+
+    const cCore = filterIgnored(cWords);
+    const tCore = filterIgnored(tWords);
+
+    if (cCore.join(' ') === tCore.join(' ')) return true;
+
+    if (cCore.length === tCore.length) {
+      return cCore.every((w, i) => w === tCore[i]);
+    }
+
+    return false;
+  }
+
+  public static isArtistMatch(candidateArtist: string | undefined, targetArtist: string): boolean {
     if (!candidateArtist || !targetArtist) return false;
-    const ca = candidateArtist.toLowerCase().trim();
-    const ta = targetArtist.toLowerCase().trim();
+    const ca = this.normalizeStr(this.cleanArtist(candidateArtist));
+    const ta = this.normalizeStr(this.cleanArtist(targetArtist));
+    if (!ca || !ta) return false;
+    if (ca === ta) return true;
     return ca.includes(ta) || ta.includes(ca);
   }
 
@@ -106,20 +153,12 @@ export class LyricsApi {
         const searchData: any = await searchRes.json();
         const songs = searchData?.result?.songs;
         if (Array.isArray(songs) && songs.length > 0) {
-          const normArtist = artist.toLowerCase().trim();
-          const normTitle = title.toLowerCase().trim();
-
           for (const s of songs) {
-            const songName = (s.name || '').toLowerCase().trim();
-            const artistNames = (s.artists || []).map((a: any) => (a.name || '').toLowerCase().trim());
-            const fullArtistStr = artistNames.join(' ');
+            const songName = s.name || '';
+            const artistNames = (s.artists || []).map((a: any) => a.name || '');
 
-            const artistMatches =
-              artistNames.some((an: string) => an.includes(normArtist) || normArtist.includes(an)) ||
-              fullArtistStr.includes(normArtist) ||
-              normArtist.includes(fullArtistStr);
-
-            const titleMatches = songName.includes(normTitle) || normTitle.includes(songName);
+            const artistMatches = artistNames.some((an: string) => this.isArtistMatch(an, artist));
+            const titleMatches = this.isTitleMatch(songName, title);
 
             if (!artistMatches || !titleMatches) {
               continue;
@@ -328,15 +367,17 @@ export class LyricsApi {
       });
       if (res.ok) {
         const data: any = await res.json();
-        if (data && (data.syncedLyrics || data.plainLyrics)) {
-          // If direct GET returned Hangul, return immediately!
-          if (/[\uac00-\ud7a3]/.test(data.syncedLyrics || data.plainLyrics || '')) {
-            return {
-              syncedLyrics: data.syncedLyrics || null,
-              plainLyrics: data.plainLyrics || null,
-              source: 'lrclib',
-            };
-          }
+        if (
+          data &&
+          (data.syncedLyrics || data.plainLyrics) &&
+          this.isArtistMatch(data.artistName, artist) &&
+          this.isTitleMatch(data.trackName, title)
+        ) {
+          return {
+            syncedLyrics: data.syncedLyrics || null,
+            plainLyrics: data.plainLyrics || null,
+            source: 'lrclib',
+          };
         }
       }
     } catch {}
@@ -353,20 +394,23 @@ export class LyricsApi {
         });
         if (res.ok) {
           const data: any = await res.json();
-          if (data && (data.syncedLyrics || data.plainLyrics)) {
-            if (/[\uac00-\ud7a3]/.test(data.syncedLyrics || data.plainLyrics || '')) {
-              return {
-                syncedLyrics: data.syncedLyrics || null,
-                plainLyrics: data.plainLyrics || null,
-                source: 'lrclib',
-              };
-            }
+          if (
+            data &&
+            (data.syncedLyrics || data.plainLyrics) &&
+            this.isArtistMatch(data.artistName, artist) &&
+            this.isTitleMatch(data.trackName, title)
+          ) {
+            return {
+              syncedLyrics: data.syncedLyrics || null,
+              plainLyrics: data.plainLyrics || null,
+              source: 'lrclib',
+            };
           }
         }
       } catch {}
     }
 
-    // 3. Search query (Preferring candidate containing Hangul characters)
+    // 3. Search query with strict title & artist matching
     try {
       const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(`${artist} ${title}`)}`;
       const res = await fetch(searchUrl, {
@@ -376,19 +420,42 @@ export class LyricsApi {
       if (res.ok) {
         const results = (await res.json()) as any[];
         if (Array.isArray(results) && results.length > 0) {
-          const hangulCandidate = results.find(
+          const validCandidates = results.filter(
             (r) =>
               (r.syncedLyrics || r.plainLyrics) &&
               this.isArtistMatch(r.artistName, artist) &&
-              /[\uac00-\ud7a3]/.test(r.syncedLyrics || r.plainLyrics || '')
+              this.isTitleMatch(r.trackName, title)
           );
-          const candidate = hangulCandidate || results.find(
-            (r) => (r.syncedLyrics || r.plainLyrics) && this.isArtistMatch(r.artistName, artist)
-          );
-          if (candidate) {
+
+          if (validCandidates.length > 0) {
+            const isTargetKorean = /[\uac00-\ud7a3]/.test(artist || '') || /[\uac00-\ud7a3]/.test(title || '');
+
+            validCandidates.sort((a, b) => {
+              let scoreA = 0;
+              let scoreB = 0;
+
+              if (a.syncedLyrics) scoreA += 10;
+              if (b.syncedLyrics) scoreB += 10;
+
+              if (isTargetKorean) {
+                if (/[\uac00-\ud7a3]/.test(a.syncedLyrics || a.plainLyrics || '')) scoreA += 5;
+                if (/[\uac00-\ud7a3]/.test(b.syncedLyrics || b.plainLyrics || '')) scoreB += 5;
+              }
+
+              if (durationSeconds && durationSeconds > 0) {
+                const diffA = Math.abs((a.duration || 0) - durationSeconds);
+                const diffB = Math.abs((b.duration || 0) - durationSeconds);
+                scoreA -= diffA * 0.1;
+                scoreB -= diffB * 0.1;
+              }
+
+              return scoreB - scoreA;
+            });
+
+            const best = validCandidates[0];
             return {
-              syncedLyrics: candidate.syncedLyrics || null,
-              plainLyrics: candidate.plainLyrics || null,
+              syncedLyrics: best.syncedLyrics || null,
+              plainLyrics: best.plainLyrics || null,
               source: 'lrclib',
             };
           }

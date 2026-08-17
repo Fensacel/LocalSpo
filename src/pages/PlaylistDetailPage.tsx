@@ -5,7 +5,7 @@ import { useFollowedPlaylistStore } from '@/stores/useFollowedPlaylistStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Play, Pause, X, ChevronLeft, RefreshCw, Clock, Archive,
-  ListMusic, Camera, Trash2, Heart, Check, Shuffle, Music,
+  ListMusic, Camera, Trash2, Heart, Check, Shuffle, Sparkles, Music,
 } from 'lucide-react';
 import { formatTime, getImageUrl } from '@/utils';
 import { createStreamSong } from '@/types/music';
@@ -311,10 +311,25 @@ export function PlaylistDetailPage() {
               {songs.length > 1 && (
                 <button
                   onClick={toggleShuffle}
-                  className={`p-2.5 rounded-full border transition-all cursor-pointer ${shuffleMode === 'on' ? 'bg-primary/15 border-primary/40 text-primary' : 'bg-white/5 border-white/10 text-text/50 hover:text-text'}`}
-                  title="Shuffle"
+                  className={`p-2.5 rounded-full border transition-all cursor-pointer ${
+                    shuffleMode !== 'off'
+                      ? 'bg-primary/15 border-primary/40 text-primary'
+                      : 'bg-white/5 border-white/10 text-text/50 hover:text-text'
+                  }`}
+                  title={
+                    shuffleMode === 'off'
+                      ? 'Enable Shuffle'
+                      : shuffleMode === 'on'
+                      ? 'Enable Smart Shuffle ✨'
+                      : 'Disable Shuffle'
+                  }
                 >
-                  <Shuffle size={16} />
+                  <div className="relative flex items-center justify-center">
+                    <Shuffle size={16} />
+                    {shuffleMode === 'smart' && (
+                      <Sparkles size={10} className="absolute -top-1.5 -right-2 text-primary fill-current animate-pulse" />
+                    )}
+                  </div>
                 </button>
               )}
 
@@ -345,6 +360,20 @@ export function PlaylistDetailPage() {
 
       {/* Songs List */}
       <div className="space-y-0.5 mb-10">
+        {songs.length > 0 && (
+          <div className="grid grid-cols-[36px_1fr_40px_50px] md:grid-cols-[40px_3fr_2fr_40px_60px] items-center gap-4 px-3 py-2 border-b border-white/10 text-xs font-mono font-bold text-text/40 uppercase tracking-wider mb-2 select-none">
+            <span className="text-center">#</span>
+            <span>Title</span>
+            <span className="hidden md:block">Album</span>
+            <span className="text-center">
+              <Heart size={13} className="mx-auto text-text/30" />
+            </span>
+            <div className="flex justify-end pr-1">
+              <Clock size={14} className="text-text/40" />
+            </div>
+          </div>
+        )}
+
         {songs.map((song, index) => {
           const isCurrent = currentSong?.id === song.id;
           const isFav = isFavoriteSong(song.id);
@@ -360,37 +389,54 @@ export function PlaylistDetailPage() {
                 e.preventDefault();
                 setContextMenu({ song, x: e.clientX, y: e.clientY });
               }}
-              className={`flex items-center gap-3.5 px-3 py-2.5 rounded-xl hover:bg-white/[0.04] transition-all cursor-pointer group border border-transparent hover:border-white/5 ${isCurrent ? 'bg-white/[0.03]' : ''}`}
+              className={`grid grid-cols-[36px_1fr_40px_50px] md:grid-cols-[40px_3fr_2fr_40px_60px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] transition-all cursor-pointer group border border-transparent hover:border-white/5 ${
+                isCurrent ? 'bg-white/[0.03]' : ''
+              }`}
             >
               {/* Index / Playing indicator */}
-              <div className="w-5 text-center shrink-0">
-                {isCurrent && isPlaying
-                  ? <Music size={13} className="text-primary animate-pulse mx-auto" />
-                  : <span className="text-xs font-mono font-bold text-text/30">{index + 1}</span>}
+              <div className="w-8 text-center shrink-0">
+                {isCurrent && isPlaying ? (
+                  <Music size={13} className="text-primary animate-pulse mx-auto" />
+                ) : (
+                  <span className="text-xs font-mono font-bold text-text/30 group-hover:hidden">{index + 1}</span>
+                )}
+                {!(isCurrent && isPlaying) && (
+                  <Play size={12} fill="currentColor" className="text-white hidden group-hover:block mx-auto" />
+                )}
               </div>
 
-              {/* Artwork */}
-              <div className="w-9 h-9 rounded-lg overflow-hidden shrink-0 bg-white/5 border border-white/5">
-                <SafeImage src={song.coverPath} alt="" className="w-full h-full object-cover" />
+              {/* Artwork & Info (Title + Artist) */}
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-white/5 border border-white/5">
+                  <SafeImage src={song.coverPath} alt="" className="w-full h-full object-cover" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className={`text-xs font-semibold truncate transition-colors ${isCurrent ? 'text-primary' : 'text-white group-hover:text-primary'}`}>
+                    {song.title}
+                  </p>
+                  <p className="text-[11px] text-text/40 truncate">{song.artist}</p>
+                </div>
               </div>
 
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <p className={`text-xs font-semibold truncate transition-colors ${isCurrent ? 'text-primary' : 'text-white group-hover:text-primary'}`}>
-                  {song.title}
-                </p>
-                <p className="text-[11px] text-text/40 truncate">{song.artist}</p>
+              {/* Album */}
+              <div className="hidden md:block min-w-0">
+                <p className="text-xs text-text/40 truncate">{song.album || 'Single'}</p>
               </div>
 
-              {/* Fav & Duration */}
-              <button
-                onClick={(e) => { e.stopPropagation(); toggleFavoriteSong(song.id); }}
-                className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md ${isFav ? 'opacity-100 text-red-400' : 'text-text/30 hover:text-red-400'}`}
-              >
-                <Heart size={13} fill={isFav ? 'currentColor' : 'none'} />
-              </button>
+              {/* Like / Favorite Button */}
+              <div className="flex items-center justify-center">
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleFavoriteSong(song.id); }}
+                  className={`opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md ${isFav ? 'opacity-100 text-red-400' : 'text-text/30 hover:text-red-400'}`}
+                >
+                  <Heart size={13} fill={isFav ? 'currentColor' : 'none'} />
+                </button>
+              </div>
 
-              <span className="text-xs font-mono text-text/30 shrink-0">{formatTime(song.duration)}</span>
+              {/* Duration */}
+              <div className="text-right pr-1">
+                <span className="text-xs font-mono text-text/30">{formatTime(song.duration)}</span>
+              </div>
             </div>
           );
         })}

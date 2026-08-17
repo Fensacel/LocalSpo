@@ -7,6 +7,7 @@ import {
   SkipBack,
   SkipForward,
   Shuffle,
+  Sparkles,
   Repeat,
   Repeat1,
   Volume2,
@@ -228,8 +229,24 @@ export function MiniPlayer() {
 
         {/* Center: Playback Controls */}
         <div className="flex-1 flex items-center justify-center gap-2 md:gap-3">
-          <ControlButton onClick={toggleShuffle} active={shuffleMode === 'on'} size="sm">
-            <Shuffle size={15} strokeWidth={1.8} />
+          <ControlButton
+            onClick={toggleShuffle}
+            active={shuffleMode !== 'off'}
+            title={
+              shuffleMode === 'off'
+                ? 'Enable Shuffle'
+                : shuffleMode === 'on'
+                ? 'Enable Smart Shuffle ✨'
+                : 'Disable Shuffle'
+            }
+            size="sm"
+          >
+            <div className="relative flex items-center justify-center">
+              <Shuffle size={15} strokeWidth={1.8} />
+              {shuffleMode === 'smart' && (
+                <Sparkles size={10} className="absolute -top-1.5 -right-2 text-[#0070F3] fill-current animate-pulse" />
+              )}
+            </div>
           </ControlButton>
 
           <ControlButton onClick={playPrevious}>

@@ -20,52 +20,64 @@ export class RomanizationService {
     }
 
     // Process asynchronously without blocking UI / main thread
-    const processedLines: LyricLine[] = lyrics.lines.map((line) => {
-      const script = LanguageDetector.detectScript(line.text);
+    const processedLines: LyricLine[] = await Promise.all(
+      lyrics.lines.map(async (line) => {
+        const script = LanguageDetector.detectScript(line.text);
 
-      if (script === 'latin') {
-        return { ...line, romanization: undefined };
-      }
-
-      let romanizedText = line.text;
-
-      switch (script) {
-        case 'korean':
-          romanizedText = KoreanProvider.romanize(line.text);
-          break;
-        case 'japanese':
-          romanizedText = JapaneseProvider.romanize(line.text);
-          break;
-        case 'chinese':
-          romanizedText = ChineseProvider.romanize(line.text);
-          break;
-        case 'cyrillic':
-        case 'greek':
-        case 'arabic':
-        case 'hindi':
-        case 'thai':
-          romanizedText = GenericProvider.romanize(line.text);
-          break;
-      }
-
-      // Sync word-level timestamps if words exist
-      let romanizedWords = line.words;
-      if (line.words && line.words.length > 0 && romanizedText !== line.text) {
-        const romTokens = romanizedText.split(/\s+/).filter(t => t.length > 0);
-        if (romTokens.length === line.words.length) {
-          romanizedWords = line.words.map((w, idx) => ({
-            ...w,
-            text: romTokens[idx] || w.text,
-          }));
+        if (script === 'latin') {
+          return { ...line, romanization: undefined };
         }
-      }
 
-      return {
-        ...line,
-        romanization: romanizedText !== line.text ? romanizedText : undefined,
-        romanizationWords: romanizedWords,
-      };
-    });
+        let romanizedText = line.text;
+
+        switch (script) {
+          case 'korean':
+            romanizedText = KoreanProvider.romanize(line.text);
+            break;
+          case 'japanese':
+            romanizedText = await JapaneseProvider.romanizeAsync(line.text);
+            break;
+          case 'chinese':
+            romanizedText = ChineseProvider.romanize(line.text);
+            break;
+          case 'cyrillic':
+          case 'greek':
+          case 'arabic':
+          case 'hindi':
+          case 'thai':
+            romanizedText = GenericProvider.romanize(line.text);
+            break;
+        }
+
+        // Sync word-level timestamps if words exist
+        let romanizedWords = line.words;
+        if (line.words && line.words.length > 0) {
+          if (script === 'japanese') {
+            romanizedWords = await Promise.all(
+              line.words.map(async (w) => {
+                const rom = await JapaneseProvider.romanizeAsync(w.text);
+                return { ...w, text: rom || w.text };
+              })
+            );
+            romanizedText = romanizedWords.map((w) => w.text).join(' ');
+          } else if (romanizedText !== line.text) {
+            const romTokens = romanizedText.split(/\s+/).filter((t) => t.length > 0);
+            if (romTokens.length === line.words.length) {
+              romanizedWords = line.words.map((w, idx) => ({
+                ...w,
+                text: romTokens[idx] || w.text,
+              }));
+            }
+          }
+        }
+
+        return {
+          ...line,
+          romanization: romanizedText !== line.text ? romanizedText : undefined,
+          romanizationWords: romanizedWords,
+        };
+      })
+    );
 
     const overallScript = LanguageDetector.detectScript(
       lyrics.lines.map(l => l.text).slice(0, 5).join(' ')

@@ -44,7 +44,7 @@ export function ProfilePage() {
   const { username } = useParams<{ username: string }>();
   const navigate = useNavigate();
   const { user, profile: authProfile, refreshProfile } = useAuth();
-  const { profile: localProfile, loadProfile, saveProfile, updateAvatar, updateBanner } = useProfileStore();
+  const { profile: localProfile, loadProfile, saveProfile } = useProfileStore();
   const stats = useStatsStore();
   const { playlists } = usePlaylistStore();
   const { isFollowing, isMutualFriend, toggleFollow, fetchFriends, followingIds, followerIds } = useChatStore();
@@ -108,29 +108,52 @@ export function ProfilePage() {
     }
   }, [username, isOwnProfile, authProfile?.username, localProfile?.username]);
 
+  const defaultGuestProfile = {
+    id: 'guest',
+    username: 'guest',
+    displayName: 'Guest',
+    avatarUrl: null,
+    bannerUrl: null,
+    bio: 'LocalSpo Guest User',
+    country: '',
+    favoriteGenres: [],
+    favoriteArtists: [],
+    favoriteAlbumIds: [],
+    favoriteSongIds: [],
+    joinDate: Date.now(),
+    isVerified: false,
+    followersCount: 0,
+    followingCount: 0,
+    following: [],
+    followers: [],
+    publicPlaylistIds: [],
+  };
+
   // Effective profile to display: own profile vs fetched target user profile
   const profile = isOwnProfile
-    ? (authProfile ? {
-        ...localProfile,
-        id: authProfile.id,
-        username: authProfile.username,
-        displayName: authProfile.display_name,
-        avatarUrl: avatarPreview || authProfile.avatar_url || localProfile?.avatarUrl || null,
-        bannerUrl: bannerPreview || authProfile.banner_url || localProfile?.bannerUrl || null,
-        bio: authProfile.bio || localProfile?.bio || '',
-        country: localProfile?.country || '',
-        favoriteGenres: localProfile?.favoriteGenres || [],
-        favoriteArtists: localProfile?.favoriteArtists || [],
-        favoriteAlbumIds: localProfile?.favoriteAlbumIds || [],
-        favoriteSongIds: localProfile?.favoriteSongIds || [],
-        joinDate: localProfile?.joinDate || Date.now(),
-        isVerified: localProfile?.isVerified || false,
-        followersCount: localProfile?.followersCount || 0,
-        followingCount: localProfile?.followingCount || 0,
-        following: localProfile?.following || [],
-        followers: localProfile?.followers || [],
-        publicPlaylistIds: localProfile?.publicPlaylistIds || [],
-      } : localProfile)
+    ? (!user
+        ? defaultGuestProfile
+        : authProfile ? {
+            ...localProfile,
+            id: authProfile.id,
+            username: authProfile.username,
+            displayName: authProfile.display_name,
+            avatarUrl: avatarPreview || authProfile.avatar_url || localProfile?.avatarUrl || null,
+            bannerUrl: bannerPreview || authProfile.banner_url || localProfile?.bannerUrl || null,
+            bio: authProfile.bio || localProfile?.bio || '',
+            country: localProfile?.country || '',
+            favoriteGenres: localProfile?.favoriteGenres || [],
+            favoriteArtists: localProfile?.favoriteArtists || [],
+            favoriteAlbumIds: localProfile?.favoriteAlbumIds || [],
+            favoriteSongIds: localProfile?.favoriteSongIds || [],
+            joinDate: localProfile?.joinDate || Date.now(),
+            isVerified: localProfile?.isVerified || false,
+            followersCount: localProfile?.followersCount || 0,
+            followingCount: localProfile?.followingCount || 0,
+            following: localProfile?.following || [],
+            followers: localProfile?.followers || [],
+            publicPlaylistIds: localProfile?.publicPlaylistIds || [],
+          } : localProfile)
     : fetchedTargetProfile;
 
   useEffect(() => {
@@ -179,9 +202,13 @@ export function ProfilePage() {
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
-      if (dataUrl) setAvatarPreview(dataUrl);
+      if (dataUrl) {
+        setAvatarPreview(dataUrl);
+        setIsEditing(true);
+      }
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleBannerFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -190,60 +217,34 @@ export function ProfilePage() {
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
-      if (dataUrl) setBannerPreview(dataUrl);
+      if (dataUrl) {
+        setBannerPreview(dataUrl);
+        setIsEditing(true);
+      }
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
-  const handleAvatarClick = async () => {
-    if (!isOwnProfile || !isEditing) return;
-    if (window.electronAPI?.profile?.uploadAvatar) {
-      try {
-        const file = await window.electronAPI.dialog.openFile({
-          filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
-        });
-        if (file) {
-          const relPath = await window.electronAPI.profile.uploadAvatar(file);
-          if (relPath) {
-            setAvatarPreview(relPath);
-            return;
-          }
-        }
-      } catch {}
-    }
+  const handleAvatarClick = () => {
+    if (!isOwnProfile || !user) return;
     avatarInputRef.current?.click();
   };
 
-  const handleBannerClick = async () => {
-    if (!isOwnProfile || !isEditing) return;
-    if (window.electronAPI?.profile?.uploadBanner) {
-      try {
-        const file = await window.electronAPI.dialog.openFile({
-          filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'webp'] }],
-        });
-        if (file) {
-          const relPath = await window.electronAPI.profile.uploadBanner(file);
-          if (relPath) {
-            setBannerPreview(relPath);
-            return;
-          }
-        }
-      } catch {}
-    }
+  const handleBannerClick = () => {
+    if (!isOwnProfile || !user) return;
     bannerInputRef.current?.click();
   };
 
   const handleSave = async () => {
-    let finalAvatar = avatarPreview || profile?.avatarUrl || null;
-    let finalBanner = bannerPreview || profile?.bannerUrl || null;
+    const finalAvatar = avatarPreview !== null ? avatarPreview : (profile?.avatarUrl || null);
+    const finalBanner = bannerPreview !== null ? bannerPreview : (profile?.bannerUrl || null);
 
-    if (avatarPreview) {
-      await updateAvatar(avatarPreview);
-    }
-    if (bannerPreview) {
-      await updateBanner(bannerPreview);
-    }
-    await saveProfile(editForm);
+    await saveProfile({
+      ...editForm,
+      avatarUrl: finalAvatar,
+      bannerUrl: finalBanner,
+    });
 
     if (user?.id) {
       await ProfileService.updateProfile(user.id, {
@@ -288,14 +289,14 @@ export function ProfilePage() {
 
       {/* ── Banner ──────────────────────────────────────────────── */}
       <div
-        className={`relative h-44 md:h-60 rounded-2xl overflow-hidden border border-white/5 ${isEditing && isOwnProfile ? 'cursor-pointer group' : ''}`}
+        className={`relative h-44 md:h-60 rounded-2xl overflow-hidden border border-white/5 ${isOwnProfile && user ? 'cursor-pointer group' : ''}`}
         onClick={handleBannerClick}
       >
         <SafeBanner src={bannerPreview || profile.bannerUrl}>
-          {isEditing && isOwnProfile && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-90 group-hover:opacity-100 transition-opacity">
+          {isOwnProfile && user && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
               <Camera size={24} className="text-white" />
-              <span className="text-white text-xs font-semibold ml-2">Change Banner (PNG/JPG/WEBP)</span>
+              <span className="text-white text-xs font-semibold ml-2">Ubah Banner</span>
             </div>
           )}
         </SafeBanner>
@@ -305,12 +306,12 @@ export function ProfilePage() {
       <div className="flex flex-col md:flex-row items-start md:items-end gap-4 -mt-14 md:-mt-20 px-2 md:px-4">
         {/* Avatar */}
         <div
-          className={`relative w-28 h-28 md:w-36 md:h-36 rounded-full border-4 border-[#0B0B0D] overflow-hidden bg-gradient-to-br from-[#0070F3] to-purple-700 shrink-0 ${isEditing && isOwnProfile ? 'cursor-pointer group' : ''}`}
+          className={`relative w-28 h-28 md:w-36 md:h-36 rounded-full border-4 border-[#0B0B0D] overflow-hidden bg-gradient-to-br from-[#0070F3] to-purple-700 shrink-0 ${isOwnProfile && user ? 'cursor-pointer group' : ''}`}
           onClick={handleAvatarClick}
         >
           <SafeAvatar src={avatarPreview || profile.avatarUrl} alt="Avatar" sizeClassName="w-full h-full" />
-          {isEditing && isOwnProfile && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-90 group-hover:opacity-100 transition-opacity">
+          {isOwnProfile && user && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
               <Camera size={22} className="text-white" />
             </div>
           )}
@@ -411,27 +412,36 @@ export function ProfilePage() {
 
           {isOwnProfile && (
             <>
-              {isEditing ? (
-                <>
+              {user ? (
+                isEditing ? (
+                  <>
+                    <button
+                      onClick={handleSave}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0070F3] text-white text-sm font-semibold hover:bg-[#0070F3]/80 transition-all cursor-pointer shadow-glow"
+                    >
+                      <Save size={14} /> Save
+                    </button>
+                    <button
+                      onClick={() => setIsEditing(false)}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 text-[#9CA3AF] text-sm hover:bg-white/10 transition-all cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  </>
+                ) : (
                   <button
-                    onClick={handleSave}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#0070F3] text-white text-sm font-semibold hover:bg-[#0070F3]/80 transition-all cursor-pointer shadow-glow"
+                    onClick={() => setIsEditing(true)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 transition-all cursor-pointer"
                   >
-                    <Save size={14} /> Save
+                    <Edit3 size={14} /> Edit Profile
                   </button>
-                  <button
-                    onClick={() => setIsEditing(false)}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/5 text-[#9CA3AF] text-sm hover:bg-white/10 transition-all cursor-pointer"
-                  >
-                    <X size={14} />
-                  </button>
-                </>
+                )
               ) : (
                 <button
-                  onClick={() => setIsEditing(true)}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 transition-all cursor-pointer"
+                  onClick={() => navigate('/login')}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-600/20 border border-blue-500/30 text-blue-400 hover:text-white text-sm font-semibold hover:bg-blue-600/30 transition-all cursor-pointer"
                 >
-                  <Edit3 size={14} /> Edit Profile
+                  Login dengan Google
                 </button>
               )}
             </>

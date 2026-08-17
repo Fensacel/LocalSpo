@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback } from 'react';
 import { usePlayerStore, useHistoryStore, useStreamingStore, useToastStore } from '@/stores';
 import { useStatsStore } from '@/stores/useStatsStore';
 import { getAudioUrl } from '@/utils';
+import type { Song } from '@/types';
 
 /**
  * AudioEngine is a headless component that manages the HTML5 Audio element
@@ -101,20 +102,32 @@ export function AudioEngine() {
   // ── Realtime active listening tracker & precise duration recording ──
   const activePlayedSecondsRef = useRef<number>(0);
   const isSongCompletedRef = useRef<boolean>(false);
-  const prevSongIdRef = useRef<string | null>(null);
+  const prevSongRef = useRef<Song | null>(null);
 
   useEffect(() => {
-    // When song changes, if previous song was not completed to the end, record its actual listened time
-    if (prevSongIdRef.current && prevSongIdRef.current !== currentSong?.id && !isSongCompletedRef.current) {
-      const listened = activePlayedSecondsRef.current;
-      if (listened >= 2) {
-        useStatsStore.getState().recordListeningTime(listened);
+    // When song changes, if previous song was played for >= 3 seconds, record its play & listened duration
+    const prevSong = prevSongRef.current;
+    const listened = activePlayedSecondsRef.current;
+
+    if (prevSong && prevSong.id !== currentSong?.id && !isSongCompletedRef.current && listened >= 3) {
+      try {
+        useStatsStore.getState().recordPlay({
+          songId: prevSong.id,
+          title: prevSong.title || 'Unknown',
+          artist: (prevSong as any).artist || '',
+          album: (prevSong as any).album || '',
+          coverPath: prevSong.coverPath || (prevSong as any).remoteCoverUrl || (prevSong as any).coverUrl || null,
+          duration: listened,
+          timestamp: Date.now(),
+        });
+      } catch (err) {
+        console.warn('[AudioEngine] recordPlay for previous song failed:', err);
       }
     }
 
     activePlayedSecondsRef.current = 0;
     isSongCompletedRef.current = false;
-    prevSongIdRef.current = currentSong?.id || null;
+    prevSongRef.current = currentSong || null;
   }, [currentSong?.id]);
 
   useEffect(() => {
@@ -125,6 +138,9 @@ export function AudioEngine() {
       if (!audio || audio.paused || audio.seeking || audio.readyState < 3) return;
 
       activePlayedSecondsRef.current += 1;
+      if (activePlayedSecondsRef.current > 0 && activePlayedSecondsRef.current % 10 === 0) {
+        useStatsStore.getState().recordListeningTime(10);
+      }
     }, 1000);
 
     return () => clearInterval(timer);

@@ -11,17 +11,27 @@ import { SafeAvatar, SafeImage } from '@/components/SafeImage';
 import { createStreamSong } from '@/types/music';
 import type { Song } from '@/types';
 
+import { SongContextMenu } from '@/components/SongContextMenu';
+
 export function UniversalSearchBar() {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ song: Song; x: number; y: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  const { setSearchQuery, search, searchResults } = useSpotifyStore();
+  const { setSearchQuery, search, searchResults, searchQuery } = useSpotifyStore();
   const { songs: localSongs, albums: localAlbums, artists: localArtists, addStreamSong } = useLibraryStore();
   const { playlists } = usePlaylistStore();
   const { knownUsers, profile } = useProfileStore();
   const { setQueue, setIsPlaying } = usePlayerStore();
+
+  // Sync input query with store searchQuery if updated externally
+  useEffect(() => {
+    if (searchQuery !== undefined && searchQuery !== query) {
+      setQuery(searchQuery);
+    }
+  }, [searchQuery]);
 
   // Close on outside click
   useEffect(() => {
@@ -51,9 +61,16 @@ export function UniversalSearchBar() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && query.trim()) {
-      setIsOpen(false);
-      navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const trimmed = query.trim();
+      if (trimmed) {
+        setSearchQuery(trimmed);
+        search(trimmed);
+        setIsOpen(false);
+        (e.target as HTMLInputElement).blur();
+        navigate(`/search?q=${encodeURIComponent(trimmed)}`);
+      }
     }
   };
 
@@ -216,6 +233,11 @@ export function UniversalSearchBar() {
                       <div
                         key={song.id}
                         onClick={() => handlePlaySong(song)}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setContextMenu({ song, x: e.clientX, y: e.clientY });
+                        }}
                         className="flex items-center gap-2.5 px-3 py-1.5 hover:bg-white/10 transition-colors cursor-pointer group"
                       >
                         <div className="w-8 h-8 rounded-lg bg-white/5 overflow-hidden shrink-0 border border-white/5">
@@ -358,8 +380,13 @@ export function UniversalSearchBar() {
                   <button
                     type="button"
                     onClick={() => {
-                      setIsOpen(false);
-                      navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+                      const trimmed = query.trim();
+                      if (trimmed) {
+                        setSearchQuery(trimmed);
+                        search(trimmed);
+                        setIsOpen(false);
+                        navigate(`/search?q=${encodeURIComponent(trimmed)}`);
+                      }
                     }}
                     className="w-full flex items-center justify-between px-3 py-2 rounded-xl bg-white/5 hover:bg-[#0070F3] text-xs font-semibold text-white transition-all cursor-pointer group"
                   >
@@ -372,6 +399,15 @@ export function UniversalSearchBar() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {contextMenu && (
+        <SongContextMenu
+          song={contextMenu.song}
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+        />
+      )}
     </div>
   );
 }

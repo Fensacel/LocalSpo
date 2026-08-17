@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { formatHours } from '@/utils';
 import { useLibraryStore } from './useLibraryStore';
+import { UserSyncService } from '@/services/userSyncService';
 
 export interface TrackPlay {
   songId: string;
@@ -15,9 +16,10 @@ export interface TrackPlay {
 export interface StatsState {
   plays: TrackPlay[];
   totalListeningSeconds: number;
+  activeUserId: string | null;
   recordPlay: (play: TrackPlay) => void;
   recordListeningTime: (seconds: number) => void;
-  loadStats: () => Promise<void>;
+  loadStats: (userId?: string | null) => Promise<void>;
   saveStats: () => Promise<void>;
 
   // Derived selectors in Seconds (internal)
@@ -53,6 +55,7 @@ function startOfDay(ts: number) {
 export const useStatsStore = create<StatsState>((set, get) => ({
   plays: [],
   totalListeningSeconds: 0,
+  activeUserId: null,
 
   recordPlay: (play) => {
     if (play.duration < 1) return;
@@ -71,16 +74,25 @@ export const useStatsStore = create<StatsState>((set, get) => ({
     get().saveStats();
   },
 
-  loadStats: async () => {
+  loadStats: async (userId?: string | null) => {
+    const targetUserId = userId !== undefined ? userId : get().activeUserId;
+    set({ activeUserId: targetUserId });
+
     try {
-      const data = (await window.electronAPI?.data?.read?.('stats.json')) as any;
+      const data = await UserSyncService.readData<{ plays?: TrackPlay[] }>(
+        targetUserId,
+        'stats'
+      );
       if (data?.plays && Array.isArray(data.plays)) {
         const total = (data.plays as TrackPlay[]).reduce((acc: number, p: TrackPlay) => acc + (p.duration || 0), 0);
         set({ plays: data.plays, totalListeningSeconds: total });
         get().resolveMissingCovers();
+      } else {
+        set({ plays: [], totalListeningSeconds: 0 });
       }
     } catch (err) {
       console.error('[StatsStore] load error:', err);
+      set({ plays: [], totalListeningSeconds: 0 });
     }
   },
 
@@ -108,15 +120,15 @@ export const useStatsStore = create<StatsState>((set, get) => ({
         if (window.electronAPI?.spotify?.search) {
           try {
             const query = `${p.title} ${p.artist}`.trim();
-            const res = await window.electronAPI.spotify.search(query, ['track']);
-            const trackMatch = res?.tracks?.[0];
-            if (trackMatch?.coverUrl) {
+            const res = await window.electronAPI.spotify.search(query, 'track', 1);
+            if (res?.tracks?.items?.[0]?.album?.images?.[0]?.url) {
               updated = true;
-              return { ...p, coverPath: trackMatch.coverUrl };
+              return { ...p, coverPath: res.tracks.items[0].album.images[0].url };
             }
-          } catch {}
+          } catch {
+            // Ignore
+          }
         }
-
         return p;
       }),
     );
@@ -129,11 +141,11 @@ export const useStatsStore = create<StatsState>((set, get) => ({
 
   saveStats: async () => {
     try {
-      const plays = get().plays.slice(-10000);
-      const totalListeningSeconds = get().totalListeningSeconds;
+      const { plays, totalListeningSeconds, activeUserId } = get();
+      const slicedPlays = plays.slice(-10000);
       const streak = get().getListeningStreak();
-      await window.electronAPI?.data?.write?.('stats.json', {
-        plays,
+      await UserSyncService.writeData(activeUserId, 'stats', {
+        plays: slicedPlays,
         totalListeningSeconds,
         streak,
         updatedAt: Date.now(),

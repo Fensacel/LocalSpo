@@ -1,18 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Minus, Square, X, Copy, ChevronLeft, ChevronRight, Download, MessageSquare } from 'lucide-react';
+import { Minus, Square, X, Copy, ChevronLeft, ChevronRight, Download, MessageSquare, Radio } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { platformService } from '@/platform';
 import { ProfileDropdown } from '@/components/ProfileDropdown';
 import { UniversalSearchBar } from '@/components/UniversalSearchBar';
 import { ImportPlaylistModal } from '@/components/ImportPlaylistModal';
 import { SocialChatDrawer } from '@/components/SocialChatDrawer';
+import { JamModal } from '@/components/JamModal';
 import { useChatStore } from '@/stores/useChatStore';
+import { useJamStore } from '@/stores/useJamStore';
 
 export function Titlebar() {
   const [isMaximized, setIsMaximized] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showChatDrawer, setShowChatDrawer] = useState(false);
+  const [showJamModal, setShowJamModal] = useState(false);
+  const { jamCode } = useJamStore();
   const { hasUnread, clearUnread } = useChatStore();
   const navigate = useNavigate();
 
@@ -85,6 +89,23 @@ export function Titlebar() {
         <div className="flex items-center gap-2 shrink-0" style={noDragStyle}>
           <button
             type="button"
+            onClick={() => setShowJamModal(true)}
+            title={jamCode ? `Listening Jam Active (${jamCode})` : 'Start or Join Listening Jam'}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer relative ${
+              jamCode
+                ? 'bg-[#0070F3] text-white border-[#0070F3] shadow-glow'
+                : 'bg-white/5 hover:bg-[#0070F3] text-[#9CA3AF] hover:text-white border-white/10 hover:border-transparent'
+            }`}
+          >
+            <Radio size={13} className={jamCode ? 'animate-pulse' : ''} />
+            <span className="hidden xl:inline">{jamCode ? `Jam (${jamCode})` : 'Listening Jam'}</span>
+            {jamCode && (
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping absolute -top-0.5 -right-0.5" />
+            )}
+          </button>
+
+          <button
+            type="button"
             onClick={() => setShowImportModal(true)}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 hover:bg-[#0070F3] text-xs font-semibold text-white border border-white/10 hover:border-transparent transition-all cursor-pointer"
           >
@@ -144,6 +165,9 @@ export function Titlebar() {
 
       {/* Social Chat Drawer */}
       <SocialChatDrawer isOpen={showChatDrawer} onClose={() => setShowChatDrawer(false)} />
+
+      {/* Listening Jam Modal */}
+      <JamModal isOpen={showJamModal} onClose={() => setShowJamModal(false)} />
     </>
   );
 }

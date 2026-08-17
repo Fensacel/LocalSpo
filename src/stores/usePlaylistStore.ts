@@ -1,20 +1,21 @@
 import { create } from 'zustand';
 import type { Playlist, Song } from '@/types';
-import { platformService } from '@/platform';
+import { UserSyncService } from '@/services/userSyncService';
 import { useLibraryStore } from './useLibraryStore';
 import { useStreamingStore } from './useStreamingStore';
 
 interface PlaylistState {
   playlists: Playlist[];
   isLoaded: boolean;
-  loadPlaylists: () => Promise<void>;
+  activeUserId: string | null;
+  loadPlaylists: (userId?: string | null) => Promise<void>;
   createPlaylist: (name: string, description?: string, coverPath?: string | null) => Promise<Playlist>;
   deletePlaylist: (id: string) => Promise<void>;
   updatePlaylist: (
     id: string,
     partial: Partial<Omit<Playlist, 'id' | 'createdAt'>>,
   ) => Promise<void>;
-  addSongToPlaylist: (playlistId: string, songOrId: string | Song) => Promise<void>;
+  addSongToPlaylist: (playlistId: string, songOrId: string | Song) => Promise<Playlist | void>;
   addSongsToPlaylist: (playlistId: string, songsOrIds: (string | Song)[]) => Promise<void>;
   removeSongFromPlaylist: (playlistId: string, songId: string) => Promise<void>;
   togglePinPlaylist: (id: string) => Promise<void>;
@@ -45,12 +46,18 @@ function deduplicatePlaylists(list: Playlist[]): Playlist[] {
 export const usePlaylistStore = create<PlaylistState>((set, get) => ({
   playlists: [],
   isLoaded: false,
+  activeUserId: null,
 
-  loadPlaylists: async () => {
+  loadPlaylists: async (userId?: string | null) => {
+    const targetUserId = userId !== undefined ? userId : get().activeUserId;
+    set({ activeUserId: targetUserId });
+
     try {
-      const data = (await platformService.data.read('playlists.json')) as {
-        playlists: Playlist[];
-      } | null;
+      const data = await UserSyncService.readData<{ playlists: Playlist[] }>(
+        targetUserId,
+        'playlists'
+      );
+
       if (data && Array.isArray(data.playlists)) {
         const unique = deduplicatePlaylists(data.playlists);
         set({ playlists: unique, isLoaded: true });
@@ -98,7 +105,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
 
     const updatedPlaylists = [...playlists, newPlaylist];
     set({ playlists: updatedPlaylists });
-    await platformService.data.write('playlist.json', { playlists: updatedPlaylists });
+    await UserSyncService.writeData(get().activeUserId, 'playlists', { playlists: updatedPlaylists });
     return newPlaylist;
   },
 
@@ -106,7 +113,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
     const { playlists } = get();
     const updatedPlaylists = playlists.filter((p) => p.id !== id);
     set({ playlists: updatedPlaylists });
-    await platformService.data.write('playlist.json', { playlists: updatedPlaylists });
+    await UserSyncService.writeData(get().activeUserId, 'playlists', { playlists: updatedPlaylists });
   },
 
   updatePlaylist: async (id, partial) => {
@@ -123,7 +130,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
     });
 
     set({ playlists: updatedPlaylists });
-    await platformService.data.write('playlist.json', { playlists: updatedPlaylists });
+    await UserSyncService.writeData(get().activeUserId, 'playlists', { playlists: updatedPlaylists });
   },
 
   addSongToPlaylist: async (playlistId, songOrId) => {
@@ -174,7 +181,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
       });
 
       set({ playlists: updatedPlaylists });
-      await platformService.data.write('playlist.json', { playlists: updatedPlaylists });
+      await UserSyncService.writeData(get().activeUserId, 'playlists', { playlists: updatedPlaylists });
 
       const targetPlaylist = playlists.find((p) => p.id === playlistId);
       if (targetPlaylist && newSongIds.length === 1) {
@@ -222,7 +229,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
       });
 
       set({ playlists: updatedPlaylists });
-      await platformService.data.write('playlist.json', { playlists: updatedPlaylists });
+      await UserSyncService.writeData(get().activeUserId, 'playlists', { playlists: updatedPlaylists });
 
       const targetPlaylist = playlists.find((p) => p.id === playlistId);
       if (targetPlaylist) {
@@ -248,7 +255,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
     });
 
     set({ playlists: updatedPlaylists });
-    await platformService.data.write('playlist.json', { playlists: updatedPlaylists });
+    await UserSyncService.writeData(get().activeUserId, 'playlists', { playlists: updatedPlaylists });
   },
 
   toggleFavoritePlaylist: async (id) => {
@@ -265,7 +272,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
     });
 
     set({ playlists: updatedPlaylists });
-    await platformService.data.write('playlist.json', { playlists: updatedPlaylists });
+    await UserSyncService.writeData(get().activeUserId, 'playlists', { playlists: updatedPlaylists });
   },
 }));
 

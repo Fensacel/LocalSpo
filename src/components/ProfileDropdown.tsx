@@ -34,9 +34,9 @@ export function ProfileDropdown() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const avatarSrc = cloudProfile?.avatar_url || localProfile?.avatarUrl || null;
-  const displayName = cloudProfile?.display_name || localProfile?.displayName || 'User';
-  const username = cloudProfile?.username || localProfile?.username || 'me';
+  const avatarSrc = user ? (cloudProfile?.avatar_url || localProfile?.avatarUrl || null) : null;
+  const displayName = user ? (cloudProfile?.display_name || localProfile?.displayName || 'User') : 'Guest';
+  const username = user ? (cloudProfile?.username || localProfile?.username || 'guest') : 'guest';
 
   const handleLogout = async () => {
     setOpen(false);

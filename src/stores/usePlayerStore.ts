@@ -65,6 +65,7 @@ interface PlayerState {
   // Mode & Timer actions
   toggleRepeat: () => void;
   toggleShuffle: () => void;
+  injectSmartRecommendations: () => Promise<void>;
   setSleepTimer: (option: SleepTimerOption) => void;
   startSongsSleepTimer: (count: number) => void;
   startMinutesSleepTimer: (minutes: number) => void;
@@ -187,7 +188,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     let queue: Song[];
     let queueIndex: number;
 
-    if (state.shuffleMode === 'on') {
+    if (state.shuffleMode === 'on' || state.shuffleMode === 'smart') {
       const currentSong = songs[safeStartIndex];
       const rest = songs.filter((_, i) => i !== safeStartIndex);
       queue = [currentSong, ...shuffleArray(rest)];
@@ -219,6 +220,12 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       isPlaying: true,
       sourceName: sourceName ?? null,
     });
+
+    if (state.shuffleMode === 'smart') {
+      setTimeout(() => {
+        get().injectSmartRecommendations();
+      }, 200);
+    }
     console.log(get().currentSong);
   },
 
@@ -622,41 +629,133 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       return updates;
     }),
 
-  toggleShuffle: () =>
-    set((state) => {
-      if (state.shuffleMode === 'off') {
-        const currentIndex = state.queueIndex;
-        const playedPart = state.queue.slice(0, currentIndex + 1);
-        const remainingPart = state.queue.slice(currentIndex + 1);
+  toggleShuffle: () => {
+    const state = get();
+    if (state.shuffleMode === 'off') {
+      const currentIndex = state.queueIndex;
+      const playedPart = state.queue.slice(0, currentIndex + 1);
+      const remainingPart = state.queue.slice(currentIndex + 1);
 
-        const userQueued = remainingPart.filter((s) => s.isUserQueued);
-        const normalNextUp = remainingPart.filter((s) => !s.isUserQueued);
+      const userQueued = remainingPart.filter((s) => s.isUserQueued);
+      const normalNextUp = remainingPart.filter((s) => !s.isUserQueued);
 
-        const shuffledNormal = shuffleArray(normalNextUp);
-        const newQueue = [...playedPart, ...userQueued, ...shuffledNormal];
+      const shuffledNormal = shuffleArray(normalNextUp);
+      const newQueue = [...playedPart, ...userQueued, ...shuffledNormal];
 
-        useToastStore.getState().showToast('Shuffle on', 'info');
+      useToastStore.getState().showToast('Shuffle on', 'info');
 
-        return {
-          shuffleMode: 'on',
-          queue: newQueue,
-        };
-      } else {
-        const currentSong = state.currentSong;
-        const newQueue = [...state.originalQueue];
-        const newIndex = currentSong
-          ? newQueue.findIndex((s) => s.id === currentSong.id)
-          : 0;
+      set({
+        shuffleMode: 'on',
+        queue: newQueue,
+      });
+    } else if (state.shuffleMode === 'on') {
+      useToastStore.getState().showToast('✨ Smart Shuffle on (Added recommendations)', 'info');
+      set({ shuffleMode: 'smart' });
+      get().injectSmartRecommendations();
+    } else {
+      const currentSong = state.currentSong;
+      const newQueue = state.originalQueue.filter((s) => !s.isSmartRecommended);
+      const newIndex = currentSong
+        ? newQueue.findIndex((s) => s.id === currentSong.id)
+        : 0;
 
-        useToastStore.getState().showToast('Shuffle off', 'info');
+      useToastStore.getState().showToast('Shuffle off', 'info');
 
-        return {
-          shuffleMode: 'off',
-          queue: newQueue,
-          queueIndex: Math.max(0, newIndex),
-        };
+      set({
+        shuffleMode: 'off',
+        queue: newQueue,
+        originalQueue: newQueue,
+        queueIndex: Math.max(0, newIndex),
+      });
+    }
+  },
+
+  injectSmartRecommendations: async () => {
+    const state = get();
+    if (state.queue.length === 0) return;
+
+    const existingIds = new Set(state.queue.map((s) => s.id));
+    const existingTitles = new Set(
+      state.queue.map((s) => `${s.title.toLowerCase()}_${s.artist.toLowerCase()}`)
+    );
+
+    const artists = Array.from(new Set(state.queue.map((s) => s.artist).filter(Boolean)));
+    const recommendedSongs: Song[] = [];
+
+    // 1. Local recommendations matching queue artists
+    const localSongs = useLibraryStore.getState().songs;
+    const localMatches = localSongs
+      .filter(
+        (s) =>
+          artists.some((a) => s.artist.toLowerCase().includes(a.toLowerCase())) &&
+          !existingIds.has(s.id) &&
+          !existingTitles.has(`${s.title.toLowerCase()}_${s.artist.toLowerCase()}`)
+      )
+      .map((s) => ({ ...s, isSmartRecommended: true }));
+
+    recommendedSongs.push(...shuffleArray(localMatches).slice(0, 3));
+
+    // 2. Online Spotify recommendations matching queue artists
+    if (window.electronAPI?.spotify && artists.length > 0) {
+      const selectedArtists = shuffleArray(artists).slice(0, 3);
+      try {
+        const searchPromises = selectedArtists.map((artistName) =>
+          window.electronAPI!.spotify.search(artistName, ['track'], 5)
+        );
+        const searchResultsList = await Promise.allSettled(searchPromises);
+
+        for (const res of searchResultsList) {
+          if (res.status === 'fulfilled' && res.value?.tracks && res.value.tracks.length > 0) {
+            const tracksForThisArtist = res.value.tracks
+              .filter((t: any) => {
+                const key = `stream_${t.ytVideoId || t.id}`;
+                const titleKey = `${(t.title || t.name).toLowerCase()}_${(t.artist || t.artists?.[0]?.name || '').toLowerCase()}`;
+                return !existingIds.has(key) && !existingTitles.has(titleKey);
+              })
+              .slice(0, 2)
+              .map((t: any) => {
+                const streamSong = createStreamSong({
+                  id: `stream_${t.ytVideoId || t.id}`,
+                  title: t.title || t.name,
+                  artist: t.artist || t.artists?.[0]?.name || 'Unknown Artist',
+                  album: t.album?.name || t.album || 'Single',
+                  duration: (t.durationMs || 180000) / 1000,
+                  coverUrl: t.coverUrl || t.album?.images?.[0]?.url,
+                  ytVideoId: t.ytVideoId || '',
+                });
+                streamSong.isSmartRecommended = true;
+                useLibraryStore.getState().addStreamSong(streamSong);
+                return streamSong;
+              });
+            recommendedSongs.push(...tracksForThisArtist);
+          }
+        }
+      } catch (err) {
+        console.warn('[SmartShuffle] Search error:', err);
       }
-    }),
+    }
+
+    if (recommendedSongs.length === 0) return;
+
+    const currentState = get();
+    const currentIndex = currentState.queueIndex;
+    const playedPart = currentState.queue.slice(0, currentIndex + 1);
+    const remainingPart = currentState.queue.slice(currentIndex + 1);
+
+    const interleavedRemaining: Song[] = [];
+    let recIdx = 0;
+    for (let i = 0; i < remainingPart.length; i++) {
+      interleavedRemaining.push(remainingPart[i]);
+      if ((i + 1) % 2 === 0 && recIdx < recommendedSongs.length) {
+        interleavedRemaining.push(recommendedSongs[recIdx++]);
+      }
+    }
+    while (recIdx < recommendedSongs.length) {
+      interleavedRemaining.push(recommendedSongs[recIdx++]);
+    }
+
+    set({ queue: [...playedPart, ...interleavedRemaining] });
+  },
 
   toggleQueue: () =>
     set((state) => ({

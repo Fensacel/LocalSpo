@@ -188,7 +188,65 @@ export const webPlatform: PlatformAPI = {
   },
 
   lyrics: {
-    read: async () => null,
+    read: async (
+      _songId: string,
+      _audioPath: string | null,
+      _lrcPath: string | null,
+      _hasEmbeddedLyrics: boolean,
+      artist?: string,
+      title?: string,
+      _album?: string,
+      _duration?: number
+    ) => {
+      if (!artist || !title) return null;
+      try {
+        const cleanArt = artist.replace(/\s*-\s*Topic$/i, '').trim();
+        const cleanTit = title.replace(/\[(MV|M\/V|Official Video|Lyric Video)\]/gi, '').trim();
+
+        // 1. Direct GET
+        const getUrl = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(cleanArt)}&track_name=${encodeURIComponent(cleanTit)}`;
+        const res = await fetch(getUrl);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && (data.syncedLyrics || data.plainLyrics)) {
+            return {
+              source: data.syncedLyrics ? 'lrclib_synced' : 'plain_lyrics',
+              content: data.syncedLyrics || data.plainLyrics,
+            };
+          }
+        }
+
+        // 2. Search fallback
+        const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(`${cleanArt} ${cleanTit}`)}`;
+        const sRes = await fetch(searchUrl);
+        if (sRes.ok) {
+          const list = (await sRes.json()) as any[];
+          if (Array.isArray(list) && list.length > 0) {
+            const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+            const targetArt = norm(cleanArt);
+            const targetTit = norm(cleanTit);
+
+            const match = list.find((item) => {
+              if (!item.syncedLyrics && !item.plainLyrics) return false;
+              const itemArt = norm(item.artistName || '');
+              const itemTit = norm(item.trackName || '');
+              return (itemArt.includes(targetArt) || targetArt.includes(itemArt)) &&
+                     (itemTit === targetTit || itemTit.includes(targetTit) || targetTit.includes(itemTit));
+            });
+
+            if (match) {
+              return {
+                source: match.syncedLyrics ? 'lrclib_synced' : 'plain_lyrics',
+                content: match.syncedLyrics || match.plainLyrics,
+              };
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[WebPlatform] Lyrics fetch error:', err);
+      }
+      return null;
+    },
   },
 
   app: {

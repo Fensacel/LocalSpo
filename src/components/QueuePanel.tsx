@@ -1,6 +1,6 @@
 import { usePlayerStore } from '@/stores';
 import { motion } from 'framer-motion';
-import { Play, Pause, Trash2, X, Music, ChevronUp, ChevronDown, ListMusic } from 'lucide-react';
+import { Play, Pause, Trash2, X, Music, ChevronUp, ChevronDown, ListMusic, Sparkles } from 'lucide-react';
 import { formatTime, getImageUrl } from '@/utils';
 import { useRef, useEffect } from 'react';
 
@@ -114,7 +114,7 @@ export function QueuePanel({ onClose, isOverlay = false }: QueuePanelProps) {
       )}
 
       {/* Queue items list */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 pr-1 scrollbar-thin">
+      <div className="flex-1 overflow-y-auto p-4 pb-28 space-y-4 pr-1 scrollbar-thin">
         {/* Current Song Section */}
         {currentSong && (
           <div>
@@ -318,7 +318,14 @@ export function QueuePanel({ onClose, isOverlay = false }: QueuePanelProps) {
                       </button>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-text/80 truncate">{song.title}</p>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="text-xs font-semibold text-text/80 truncate">{song.title}</p>
+                        {song.isSmartRecommended && (
+                          <span className="px-1 py-0.2 rounded text-[9px] font-mono font-bold bg-[#0070F3]/20 text-[#0070F3] border border-[#0070F3]/40 shrink-0 flex items-center gap-0.5">
+                            <Sparkles size={8} /> Rec
+                          </span>
+                        )}
+                      </div>
                       <p className="text-[10px] text-text/40 truncate">{song.artist}</p>
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
