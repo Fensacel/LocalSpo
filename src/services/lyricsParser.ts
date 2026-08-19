@@ -245,11 +245,12 @@ export function parseLrc(lrcContent: string): LyricsData {
       continue;
     }
 
-    // Remove ALL parenthetical or bracketed member name tags (e.g. "(娜琏)", "(Mina)", "(Sana)", "(Momo)", "(All)", "[Jihyo]")
-    text = text.replace(/[\(\[][^\)\]]+[\)\]]\s*/g, '').trim();
-
-
-
+    // Remove only structural bracketed section headers (e.g. "[Verse 1]", "[Chorus]", "[Bridge]", "[Outro]")
+    // while PRESERVING lyrics backing vocals in parentheses (e.g. "(Kau akan kucari)", "(1000X lagi)")
+    text = text
+      .replace(/^\[(?:verse|chorus|bridge|outro|intro|hook|refrain|pre-chorus)[\s\d]*\]\s*/i, '')
+      .replace(/^\[[A-Za-z\u4e00-\u9fa5\uac00-\ud7a3\s]+\]\s*[:：]\s*/, '')
+      .trim();
 
     for (const match of matches) {
       const minutes = parseInt(match[1], 10);
@@ -295,13 +296,61 @@ export function parseLrc(lrcContent: string): LyricsData {
 }
 
 /**
- * Parse unsynced/plain text lyrics
+ * Parse unsynced/plain text lyrics with smart proportional virtual timestamps
  */
-export function parsePlainLyrics(text: string): LyricsData {
+export function parsePlainLyrics(text: string, duration?: number): LyricsData {
+  const isSectionHeader = (line: string) =>
+    /^\[(?:verse|chorus|bridge|outro|intro|hook|refrain|pre-chorus|interlude|solo|drop)[\s\S]*\]$/i.test(line.trim()) ||
+    /^\[[\w\s,.:;!?'"&/()_-]+\]$/i.test(line.trim()) ||
+    /^\[.*(歌詞|lyrics).*\]$/i.test(line.trim());
+
   const lines = text
     .split('\n')
-    .map((line) => line.replace(/[\(\[][^\)\]]+[\)\]]\s*/g, '').trim())
-    .filter((line) => line.length > 0 && !/^[\s♪♫♬♩♭♮♯]*$/u.test(line) && !isStaffCreditLine(line));
+    .map((line) => line.trim())
+    .filter(
+      (line) =>
+        line.length > 0 &&
+        !isSectionHeader(line) &&
+        !/^[\s♪♫♬♩♭♮♯]*$/u.test(line) &&
+        !isStaffCreditLine(line)
+    );
+
+  if (lines.length === 0) {
+    return { synced: false, lines: [], rawText: text };
+  }
+
+  // If track duration is available (>20s), generate proportional virtual timestamps
+  if (duration && duration > 20) {
+    const totalDuration = duration;
+    const introDelay = Math.min(18, Math.max(6, totalDuration * 0.07));
+    const outroDuration = Math.min(22, Math.max(8, totalDuration * 0.08));
+    const vocalDuration = Math.max(15, totalDuration - introDelay - outroDuration);
+
+    const weights = lines.map((l) => Math.max(10, l.length));
+    const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+    let currentTime = introDelay;
+    const lyricLines: LyricLine[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const lineText = lines[i];
+      const lineDur = (weights[i] / totalWeight) * vocalDuration;
+      lyricLines.push({
+        time: parseFloat(currentTime.toFixed(2)),
+        endTime: parseFloat((currentTime + lineDur).toFixed(2)),
+        text: lineText,
+      });
+      currentTime += lineDur;
+    }
+
+    generateFallbackWordsForLines(lyricLines);
+
+    return {
+      synced: true,
+      lines: lyricLines,
+      rawText: lines.join('\n'),
+    };
+  }
 
   return {
     synced: false,
@@ -323,8 +372,8 @@ export function isLrcFormat(content: string): boolean {
 /**
  * Parse lyrics content, auto-detecting format with language safety validation
  */
-export function parseLyrics(content: string, artistName?: string): LyricsData {
-  const result = isLrcFormat(content) ? parseLrc(content) : parsePlainLyrics(content);
+export function parseLyrics(content: string, artistName?: string, duration?: number): LyricsData {
+  const result = isLrcFormat(content) ? parseLrc(content) : parsePlainLyrics(content, duration);
 
   // If artist is specified and NOT Chinese/Taiwanese, check if lyrics erroneously contain heavy Chinese text
   if (artistName && result.lines.length > 0) {

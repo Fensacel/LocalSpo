@@ -1,7 +1,7 @@
 import { usePlaylistStore, useLibraryStore } from '@/stores';
 import { useFollowedPlaylistStore } from '@/stores/useFollowedPlaylistStore';
-import { ListMusic, Plus, Radio, RefreshCw } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { ListMusic, Plus, Radio, RefreshCw, Trash2 } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ImportPlaylistModal } from '@/components/ImportPlaylistModal';
@@ -9,16 +9,27 @@ import { platformService } from '@/platform';
 import { SafeImage } from '@/components/SafeImage';
 
 export function PlaylistsPage() {
-  const { playlists, createPlaylist } = usePlaylistStore();
+  const { playlists, createPlaylist, deletePlaylist } = usePlaylistStore();
   const { getSongById } = useLibraryStore();
-  const { followedPlaylists, syncAll } = useFollowedPlaylistStore();
+  const { followedPlaylists, syncAll, unfollowPlaylist } = useFollowedPlaylistStore();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [playlistToDelete, setPlaylistToDelete] = useState<{ id: string; name: string } | null>(null);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [newPlaylistDesc, setNewPlaylistDesc] = useState('');
   const [newPlaylistCover, setNewPlaylistCover] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  const confirmDelete = async () => {
+    if (!playlistToDelete) return;
+    const { id, name } = playlistToDelete;
+    await deletePlaylist(id);
+    if (name) await deletePlaylist(name);
+    await unfollowPlaylist(id);
+    if (name) await unfollowPlaylist(name);
+    setPlaylistToDelete(null);
+  };
 
   const handlePickCover = async () => {
     const file = await platformService.dialog.openImage();
@@ -139,6 +150,17 @@ export function PlaylistsPage() {
             >
               <div className="aspect-square rounded-xl overflow-hidden mb-3 bg-white/5 relative border border-white/5">
                 <SafeImage src={item.coverPath} alt={item.name} className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPlaylistToDelete(item);
+                  }}
+                  title="Delete playlist"
+                  className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/70 hover:bg-red-500 text-white/80 hover:text-white backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all z-10 cursor-pointer shadow-lg"
+                >
+                  <Trash2 size={13} />
+                </button>
               </div>
 
               <h3 className="text-xs font-bold text-white truncate group-hover:text-[#0070F3] transition-colors">
@@ -156,6 +178,41 @@ export function PlaylistsPage() {
           <p className="text-xs font-semibold text-white">No playlists found</p>
         </div>
       )}
+
+      {/* Delete Confirm Modal */}
+      <AnimatePresence>
+        {playlistToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#141416] border border-white/10 p-6 rounded-2xl shadow-2xl space-y-4"
+            >
+              <h3 className="text-sm font-bold text-white">Delete Playlist?</h3>
+              <p className="text-xs text-text/50">
+                Are you sure you want to delete <strong>"{playlistToDelete.name}"</strong>? This will remove it completely from your library and account.
+              </p>
+              <div className="flex gap-3 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setPlaylistToDelete(null)}
+                  className="px-4 py-2 text-xs font-semibold text-text/60 hover:text-text hover:bg-white/5 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  className="px-4 py-2 text-xs font-bold bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors cursor-pointer"
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Modals */}
       <ImportPlaylistModal isOpen={showImportModal} onClose={() => setShowImportModal(false)} />

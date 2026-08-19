@@ -13,6 +13,7 @@ export function LyricsView() {
   const { seekByLyricsEnabled, lyricsDisplayMode, updateSettings } = useSettingsStore();
   const [lyrics, setLyrics] = useState<LyricsData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const lineRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
@@ -35,7 +36,6 @@ export function LyricsView() {
           setTimeout(() => resolve(null), 15000)
         );
 
-
         const result = await Promise.race([
           window.electronAPI.lyrics.read(
             currentSong.id,
@@ -53,7 +53,7 @@ export function LyricsView() {
         if (cancelled) return;
 
         if (result && result.content) {
-          const parsed = parseLyrics(result.content, currentSong.artist);
+          const parsed = parseLyrics(result.content, currentSong.artist, currentSong.duration);
           RomanizationService.clearCache(currentSong.id);
           const processed = await RomanizationService.processLyrics(parsed, currentSong.id, true);
           if (!cancelled) setLyrics(processed || parsed);
@@ -69,7 +69,6 @@ export function LyricsView() {
       }
     };
 
-
     loadLyrics();
 
     return () => {
@@ -81,11 +80,6 @@ export function LyricsView() {
     if (!currentSong) return;
     setIsLoading(true);
     try {
-      const dataPath = await window.electronAPI.app.getDataPath();
-      const cachedPath = await window.electronAPI.path.join(dataPath, 'cache', 'lyrics', `${currentSong.id}.txt`);
-      if (await window.electronAPI.fs.exists(cachedPath)) {
-        await window.electronAPI.fs.writeFile(cachedPath, 'RELOAD');
-      }
       const result = await window.electronAPI.lyrics.read(
         currentSong.id,
         currentSong.path,
@@ -94,13 +88,16 @@ export function LyricsView() {
         currentSong.artist,
         currentSong.title,
         currentSong.album,
-        currentSong.duration
+        currentSong.duration,
+        true
       );
       if (result && result.content) {
-        const parsed = parseLyrics(result.content, currentSong.artist);
+        const parsed = parseLyrics(result.content, currentSong.artist, currentSong.duration);
         RomanizationService.clearCache(currentSong.id);
         const processed = await RomanizationService.processLyrics(parsed, currentSong.id, true);
         setLyrics(processed || parsed);
+      } else {
+        setLyrics(null);
       }
     } catch (err) {
       console.error('Refresh lyrics error:', err);
@@ -174,10 +171,17 @@ export function LyricsView() {
                   {currentSong ? `${currentSong.artist} — ${currentSong.title}` : ''}
                 </p>
               </div>
+              <button
+                onClick={handleRefreshLyrics}
+                className="mt-2 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 border border-white/10 text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer"
+              >
+                <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+                <span>Search / Reload Lyrics</span>
+              </button>
             </div>
           )}
 
-          {/* Mode Selector Tab & Reload Lyrics */}
+          {/* Mode Selector Tab & Action Buttons */}
           {!isLoading && lyrics && (
             <div className="flex items-center justify-center mb-8 gap-3">
               {lyrics.lines.some((l) => l.romanization) && (
@@ -199,7 +203,7 @@ export function LyricsView() {
               )}
               <button
                 onClick={handleRefreshLyrics}
-                title="Muat Ulang / Cari Ulang Lirik (Hangul/Original)"
+                title="Muat Ulang / Cari Ulang Lirik"
                 className="p-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-white/70 hover:text-white transition-all cursor-pointer flex items-center gap-1.5 text-xs font-medium"
               >
                 <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
@@ -268,7 +272,7 @@ export function LyricsView() {
             </div>
           )}
 
-          {/* Plain (unsynced) lyrics */}
+          {/* Plain (unsynced) lyrics fallback */}
           {!isLoading && lyrics && !lyrics.synced && (
             <div className="space-y-4 md:space-y-5 text-center">
               {lyrics.lines.map((line, index) => (
@@ -281,7 +285,6 @@ export function LyricsView() {
               ))}
             </div>
           )}
-
         </div>
       </div>
     </div>

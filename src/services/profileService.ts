@@ -5,7 +5,7 @@ export interface UserProfile {
   id: string;
   username: string;
   display_name: string;
-  email: string;
+  email?: string;
   avatar_url: string | null;
   banner_url: string | null;
   bio: string;
@@ -39,11 +39,11 @@ export class ProfileService {
    */
   public static async getProfileByUsername(username: string): Promise<UserProfile | null> {
     try {
-      const cleanUsername = username.replace(/^@/, '').trim();
+      const cleanUsername = username.replace(/^@/, '').trim().toLowerCase();
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .eq('username', cleanUsername)
+        .ilike('username', cleanUsername)
         .maybeSingle();
 
       if (error || !data) return null;
@@ -113,7 +113,7 @@ export class ProfileService {
         const { data } = await supabase
           .from('profiles')
           .select('id')
-          .eq('username', candidateUsername)
+          .ilike('username', candidateUsername)
           .maybeSingle();
 
         if (!data) {
@@ -149,28 +149,56 @@ export class ProfileService {
   }
 
   /**
-   * Updates fields on user profile
+   * Updates fields on user profile with upsert to prevent missing row errors
    */
   public static async updateProfile(userId: string, updates: Partial<UserProfile>): Promise<UserProfile | null> {
     try {
-      const { data, error } = await supabase
+      const cleanUpdates: Record<string, any> = {
+        updated_at: new Date().toISOString(),
+      };
+      if (updates.username !== undefined) cleanUpdates.username = updates.username.trim().toLowerCase();
+      if (updates.display_name !== undefined) cleanUpdates.display_name = updates.display_name.trim();
+      if (updates.bio !== undefined) cleanUpdates.bio = updates.bio;
+      if (updates.avatar_url !== undefined) cleanUpdates.avatar_url = updates.avatar_url;
+      if (updates.banner_url !== undefined) cleanUpdates.banner_url = updates.banner_url;
+
+      // 1. Try standard UPDATE first (avoids NOT NULL constraint check on omitted fields like email)
+      const { data: updatedData, error: updateError } = await supabase
         .from('profiles')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
+        .update(cleanUpdates)
         .eq('id', userId)
+        .select()
+        .maybeSingle();
+
+      if (!updateError && updatedData) {
+        return updatedData as UserProfile;
+      }
+
+      // 2. If row does not exist yet, fallback to upsert with required email
+      let email = updates.email;
+      if (!email) {
+        const { data: authData } = await supabase.auth.getUser();
+        email = authData?.user?.email || `${cleanUpdates.username || 'user'}@localspo.app`;
+      }
+
+      const { data: upsertedData, error: upsertError } = await supabase
+        .from('profiles')
+        .upsert({
+          id: userId,
+          email,
+          ...cleanUpdates,
+        }, { onConflict: 'id' })
         .select()
         .single();
 
-      if (error) {
-        console.error('[ProfileService] updateProfile error:', error);
-        return null;
+      if (upsertError) {
+        console.error('[ProfileService] updateProfile upsert error:', upsertError.message || upsertError);
+        throw upsertError;
       }
-      return data as UserProfile;
+      return upsertedData as UserProfile;
     } catch (err) {
       console.error('[ProfileService] updateProfile exception:', err);
-      return null;
+      throw err;
     }
   }
 

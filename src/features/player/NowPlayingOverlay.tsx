@@ -186,7 +186,7 @@ export function NowPlayingOverlay() {
       .then(async (res: { source: string; content: string } | null) => {
         if (cancelled) return;
         if (res) {
-          const parsed = parseLyrics(res.content);
+          const parsed = parseLyrics(res.content, currentSong.artist, currentSong.duration);
           const processed = await RomanizationService.processLyrics(parsed, currentSong.id);
           if (!cancelled) setLyrics(processed);
         } else {

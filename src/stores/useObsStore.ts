@@ -99,7 +99,7 @@ async function fetchLyricsForSong(song: any) {
         song.duration
       );
       if (res && res.content) {
-        activeParsedLyrics = parseLyrics(res.content, song.artist);
+        activeParsedLyrics = parseLyrics(res.content, song.artist, song.duration);
         useObsStore.getState().syncPlayerState();
       }
     }

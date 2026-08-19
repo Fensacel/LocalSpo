@@ -52,7 +52,7 @@ export function LyricsPanel() {
       ]);
 
       if (result && result.content) {
-        const parsed = parseLyrics(result.content, currentSong.artist);
+        const parsed = parseLyrics(result.content, currentSong.artist, currentSong.duration);
         RomanizationService.clearCache(currentSong.id);
         const processed = await RomanizationService.processLyrics(parsed, currentSong.id, true);
         setLyrics(processed || parsed);

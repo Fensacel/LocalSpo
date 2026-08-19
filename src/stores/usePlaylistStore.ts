@@ -61,6 +61,9 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
       if (data && Array.isArray(data.playlists)) {
         const unique = deduplicatePlaylists(data.playlists);
         set({ playlists: unique, isLoaded: true });
+        if (unique.length !== data.playlists.length) {
+          await UserSyncService.writeData(targetUserId, 'playlists', { playlists: unique });
+        }
 
         // Pre-stream playlist songs in background on launch
         setTimeout(() => {
@@ -90,7 +93,7 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
   },
 
   createPlaylist: async (name, description = '', coverPath = null) => {
-    const { playlists } = get();
+    const { playlists, activeUserId } = get();
     const newPlaylist: Playlist = {
       id: Math.random().toString(36).slice(2, 11),
       name,
@@ -105,15 +108,38 @@ export const usePlaylistStore = create<PlaylistState>((set, get) => ({
 
     const updatedPlaylists = [...playlists, newPlaylist];
     set({ playlists: updatedPlaylists });
-    await UserSyncService.writeData(get().activeUserId, 'playlists', { playlists: updatedPlaylists });
+    await UserSyncService.writeData(activeUserId, 'playlists', { playlists: updatedPlaylists });
     return newPlaylist;
   },
 
-  deletePlaylist: async (id) => {
-    const { playlists } = get();
-    const updatedPlaylists = playlists.filter((p) => p.id !== id);
+  deletePlaylist: async (idOrName: string) => {
+    if (!idOrName) return;
+    const { playlists, activeUserId } = get();
+    const query = idOrName.trim().toLowerCase();
+    const target = playlists.find((p) => p.id === idOrName || p.name.trim().toLowerCase() === query);
+    const targetName = target?.name || idOrName;
+
+    const updatedPlaylists = playlists.filter(
+      (p) => p.id !== idOrName && p.name.trim().toLowerCase() !== query
+    );
     set({ playlists: updatedPlaylists });
-    await UserSyncService.writeData(get().activeUserId, 'playlists', { playlists: updatedPlaylists });
+    await UserSyncService.writeData(activeUserId, 'playlists', { playlists: updatedPlaylists });
+
+    // Also clean up from followed playlists store by both ID and Name
+    try {
+      const { useFollowedPlaylistStore } = await import('./useFollowedPlaylistStore');
+      const followedStore = useFollowedPlaylistStore.getState();
+      await followedStore.unfollowPlaylist(idOrName);
+      if (targetName && targetName.toLowerCase() !== idOrName.toLowerCase()) {
+        await followedStore.unfollowPlaylist(targetName);
+      }
+    } catch (err) {
+      console.warn('[usePlaylistStore] Followed playlist cleanup error on delete:', err);
+    }
+
+    if (target) {
+      useToastStore.getState().showToast(`Deleted "${target.name}"`, 'info');
+    }
   },
 
   updatePlaylist: async (id, partial) => {

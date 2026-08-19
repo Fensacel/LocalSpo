@@ -275,6 +275,8 @@ const electronAPI: ElectronAPI = {
   lyrics: {
     read: (songId, audioPath, lrcPath, hasEmbeddedLyrics, artist, title, album, duration, forceRefresh) =>
       ipcRenderer.invoke('lyrics:read', songId, audioPath, lrcPath, hasEmbeddedLyrics, artist, title, album, duration, forceRefresh),
+    save: (songId, content) =>
+      ipcRenderer.invoke('lyrics:save', songId, content),
   },
   downloader: {
     downloadSpotify: (url) => ipcRenderer.invoke('downloader:downloadSpotify', url),

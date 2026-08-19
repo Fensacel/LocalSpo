@@ -55,6 +55,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const userProfile = await ProfileService.ensureProfile(authUser);
       setProfile(userProfile);
+      if (userProfile) {
+        useProfileStore.getState().saveProfile({
+          id: userProfile.id,
+          username: userProfile.username,
+          displayName: userProfile.display_name,
+          bio: userProfile.bio || '',
+          avatarUrl: userProfile.avatar_url,
+          bannerUrl: userProfile.banner_url,
+        });
+      }
     } catch (err) {
       console.error('[AuthProvider] loadUserProfile error:', err);
     }
@@ -63,7 +73,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshProfile = useCallback(async () => {
     if (user) {
       const updated = await ProfileService.getProfile(user.id);
-      if (updated) setProfile(updated);
+      if (updated) {
+        setProfile(updated);
+        useProfileStore.getState().saveProfile({
+          id: updated.id,
+          username: updated.username,
+          displayName: updated.display_name,
+          bio: updated.bio || '',
+          avatarUrl: updated.avatar_url,
+          bannerUrl: updated.banner_url,
+        });
+      }
     }
   }, [user]);
 

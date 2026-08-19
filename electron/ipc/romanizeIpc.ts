@@ -16,10 +16,11 @@ async function initKuroshiro() {
     try {
       // Find dict path for kuromoji
       const candidatePaths = [
+        path.join(process.cwd(), 'node_modules', 'kuromoji', 'dict'),
+        path.join(app.getAppPath(), 'node_modules', 'kuromoji', 'dict'),
         path.join(app.getAppPath(), 'public', 'dict'),
         path.join(__dirname, '../public/dict'),
         path.join(__dirname, '../../node_modules/kuromoji/dict'),
-        path.join(process.cwd(), 'node_modules', 'kuromoji', 'dict'),
         path.join(process.cwd(), 'public', 'dict'),
       ];
 
@@ -27,8 +28,15 @@ async function initKuroshiro() {
 
       console.log('[RomanizeIPC] Loading Kuromoji dictionary from:', dictPath);
 
-      const instance = new Kuroshiro();
-      const analyzer = new KuromojiAnalyzer({ dictPath });
+      const KuroshiroClass: any =
+        (Kuroshiro as any)?.default?.default || (Kuroshiro as any)?.default || Kuroshiro;
+      const KuromojiAnalyzerClass: any =
+        (KuromojiAnalyzer as any)?.default?.default ||
+        (KuromojiAnalyzer as any)?.default ||
+        KuromojiAnalyzer;
+
+      const instance = new KuroshiroClass();
+      const analyzer = new KuromojiAnalyzerClass({ dictPath });
       await instance.init(analyzer);
       kuroshiroInstance = instance;
       console.log('[RomanizeIPC] Kuroshiro initialized successfully in Main process');
@@ -52,7 +60,13 @@ export function registerRomanizeIpc() {
           romajiSystem: 'hepburn',
         });
         if (rom && rom.trim()) {
-          return rom.charAt(0).toUpperCase() + rom.slice(1);
+          const clean = rom
+            .replace(/\s+([,.:;!?])/g, '$1')
+            .replace(/\s+([)\]}’”"'])/g, '$1')
+            .replace(/([(\[{‘“"'])\s+/g, '$1')
+            .replace(/\s+/g, ' ')
+            .trim();
+          return clean.charAt(0).toUpperCase() + clean.slice(1);
         }
       }
     } catch (err) {

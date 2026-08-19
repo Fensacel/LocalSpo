@@ -182,7 +182,12 @@ export function getAudioUrl(filePath: string): string {
 
 export function getImageUrl(filePath: string): string {
   if (!filePath) return '';
-  if (filePath.startsWith('http://') || filePath.startsWith('https://') || filePath.startsWith('data:')) {
+  if (
+    filePath.startsWith('http://') ||
+    filePath.startsWith('https://') ||
+    filePath.startsWith('data:') ||
+    filePath.startsWith('blob:')
+  ) {
     let clean = filePath;
     if (clean.includes('i.ytimg.com')) {
       clean = clean

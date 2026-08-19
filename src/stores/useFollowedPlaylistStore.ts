@@ -103,6 +103,15 @@ export const useFollowedPlaylistStore = create<FollowedPlaylistState>((set, get)
           followedPlaylists: s.followedPlaylists.map((p) => (p.id === data.id ? updated : p)),
         }));
         await get().saveFollowedPlaylists();
+        const { PlaylistFollowService } = await import('@/services/playlistFollowService');
+        const { supabase } = await import('@/lib/supabase');
+        const { useProfileStore } = await import('@/stores/useProfileStore');
+        const sessionUser = (await supabase.auth.getUser())?.data?.user;
+        const userId = sessionUser?.id || useProfileStore.getState().profile?.id;
+        if (userId) {
+          const provider = (data.provider === 'spotify' || data.provider === 'ytmusic') ? data.provider : 'spotify';
+          await PlaylistFollowService.followPlaylist(userId, data.id, provider);
+        }
         useToastStore.getState().showToast?.(`Following "${data.name}"`, 'success');
         return updated;
       }
@@ -156,28 +165,66 @@ export const useFollowedPlaylistStore = create<FollowedPlaylistState>((set, get)
     }));
     await get().saveFollowedPlaylists();
 
+    const { PlaylistFollowService } = await import('@/services/playlistFollowService');
+    const { supabase } = await import('@/lib/supabase');
+    const { useProfileStore } = await import('@/stores/useProfileStore');
+    const sessionUser = (await supabase.auth.getUser())?.data?.user;
+    const userId = sessionUser?.id || useProfileStore.getState().profile?.id;
+    if (userId) {
+      const provider = (newPlaylist.provider === 'spotify' || newPlaylist.provider === 'ytmusic') ? newPlaylist.provider : 'spotify';
+      await PlaylistFollowService.followPlaylist(userId, newPlaylist.id, provider);
+    }
+
     useToastStore.getState().showToast?.(`Following "${newPlaylist.name}" (Live Sync)`, 'success');
     return newPlaylist;
   },
 
-  unfollowPlaylist: async (id) => {
-    const pl = get().followedPlaylists.find((p) => p.id === id);
-    set((s) => ({
-      followedPlaylists: s.followedPlaylists.filter((p) => p.id !== id),
-    }));
+  unfollowPlaylist: async (idOrName: string) => {
+    if (!idOrName) return;
+    const query = idOrName.trim().toLowerCase();
+    const state = get();
+    const matched = state.followedPlaylists.filter(
+      (p) => p.id === idOrName || p.name.trim().toLowerCase() === query
+    );
+    if (matched.length === 0) return;
+
+    const remaining = state.followedPlaylists.filter(
+      (p) => p.id !== idOrName && p.name.trim().toLowerCase() !== query
+    );
+    set({ followedPlaylists: remaining });
     await get().saveFollowedPlaylists();
-    if (pl) {
-      useToastStore.getState().showToast?.(`Unfollowed "${pl.name}"`, 'info');
+
+    try {
+      const { PlaylistFollowService } = await import('@/services/playlistFollowService');
+      const { supabase } = await import('@/lib/supabase');
+      const { useProfileStore } = await import('@/stores/useProfileStore');
+      const sessionUser = (await supabase.auth.getUser().catch(() => ({ data: { user: null } })))?.data?.user;
+      const userId = sessionUser?.id || useProfileStore.getState().profile?.id;
+      if (userId) {
+        for (const item of matched) {
+          await PlaylistFollowService.unfollowPlaylist(userId, item.id);
+        }
+      }
+    } catch (err) {
+      console.warn('[FollowedPlaylistStore] Unfollow cloud error:', err);
     }
   },
 
-  isPlaylistFollowed: (id) => {
-    const found = get().followedPlaylists.find((p) => p.id === id);
+  isPlaylistFollowed: (idOrName: string) => {
+    if (!idOrName) return false;
+    const query = idOrName.trim().toLowerCase();
+    const found = get().followedPlaylists.find(
+      (p) => p.id === idOrName || p.name.trim().toLowerCase() === query
+    );
     return !!found && found.isFollowed;
   },
 
-  getFollowedPlaylist: (id) => {
-    return get().followedPlaylists.find((p) => p.id === id);
+  getFollowedPlaylist: (idOrName: string) => {
+    if (!idOrName) return undefined;
+    const query = idOrName.trim().toLowerCase();
+    return get().followedPlaylists.find(
+      (p) => p.id === idOrName || p.name.trim().toLowerCase() === query
+    );
   },
 
   syncPlaylist: async (id) => {

@@ -19,7 +19,11 @@ export class PlaylistFollowService {
         auto_sync: autoSync,
         created_at: new Date().toISOString(),
       });
-      return !error;
+      if (error) {
+        console.error('[PlaylistFollowService] Supabase insert error:', error);
+        return false;
+      }
+      return true;
     } catch (err) {
       console.error('[PlaylistFollowService] follow error:', err);
       return false;

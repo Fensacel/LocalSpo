@@ -16,12 +16,14 @@ export class JapaneseProvider {
     this.initPromise = (async () => {
       try {
         // Dynamically import to avoid Vite bundle top-level crash on Node built-ins
-        const { default: Kuroshiro } = await import('kuroshiro');
-        // @ts-ignore
-        const { default: KuromojiAnalyzer } = await import('kuroshiro-analyzer-kuromoji');
+        const kuroMod: any = await import('kuroshiro');
+        const kuromojiMod: any = await import('kuroshiro-analyzer-kuromoji');
+        const KuroshiroClass: any = kuroMod?.default?.default || kuroMod?.default || kuroMod;
+        const KuromojiAnalyzerClass: any =
+          kuromojiMod?.default?.default || kuromojiMod?.default || kuromojiMod;
 
-        const instance = new Kuroshiro();
-        const analyzer = new KuromojiAnalyzer({
+        const instance = new KuroshiroClass();
+        const analyzer = new KuromojiAnalyzerClass({
           dictPath: '/dict/',
         });
         await instance.init(analyzer);
@@ -158,44 +160,67 @@ export class JapaneseProvider {
     泳: 'oyo', 登: 'nobo', 降: 'furu', 咲: 'saki', 散: 'chiru', 舞: 'mau', 流: 'nagare',
     燃: 'moe', 消: 'kie', 開: 'hira', 閉: 'toji', 始: 'haji', 終: 'owa', 守: 'mamo',
     勝: 'katsu', 負: 'make', 戦: 'tata', 祈: 'ino', 願: 'nega', 信: 'shin', 許: 'yuru',
+    弾: 'haji', 気: 'ki', 刺: 'shi', 激: 'geki', 的: 'teki', 暑: 'atsu', 季: 'ki', 節: 'setsu',
+    叫: 'sake', 無: 'mu', 敵: 'teki', 甘: 'ama', 最: 'sai', 高: 'kou', 氷: 'koori',
+    強: 'tsuyo', 輝: 'kagaya', 溶: 'to', 回: 'kai', 汗: 'ase', 満: 'michi', 触: 'fu',
+    瞬: 'shun', 間: 'kan', 電: 'den', 追: 'o', 離: 'hana', 近: 'chika', 誰: 'dare', 何: 'nani',
+    一: 'hitori', 二: 'futari', 三: 'san', 四: 'yon', 五: 'go',
   };
 
   private static romanizeFallback(text: string): string {
     if (!text) return text;
-    let i = 0;
+
+    // Tokenize into English words, Kana chunks, Kanji, and Punctuation
+    const regex = /([A-Za-z0-9'’]+)|([ぁ-んァ-ヶー]+)|([一-龯]+)|([\s,.:;!?\-~()\[\]{}'"「」『』]+)|(.)/gu;
     const tokens: string[] = [];
+    let match: RegExpExecArray | null;
 
-    while (i < text.length) {
-      const char = text[i];
-      if (/\s/.test(char) || /[?,.!〜…〜-]/.test(char)) {
-        tokens.push(char);
-        i++;
-        continue;
-      }
+    while ((match = regex.exec(text)) !== null) {
+      const [, latin, kana, kanji, punct, other] = match;
 
-      let matched = false;
-      for (let len = 6; len >= 2; len--) {
-        if (i + len <= text.length) {
-          const phrase = text.slice(i, i + len);
-          if (this.COMPOUND_MAP[phrase]) {
-            tokens.push(this.COMPOUND_MAP[phrase]);
-            i += len;
-            matched = true;
-            break;
+      if (latin) {
+        tokens.push(latin);
+      } else if (kana) {
+        tokens.push(wanakana.toRomaji(kana));
+      } else if (kanji) {
+        // Check compounds
+        let kStr = kanji;
+        let kTokens: string[] = [];
+        let ki = 0;
+        while (ki < kStr.length) {
+          let foundCompound = false;
+          for (let len = 4; len >= 2; len--) {
+            if (ki + len <= kStr.length) {
+              const comp = kStr.slice(ki, ki + len);
+              if (this.COMPOUND_MAP[comp]) {
+                kTokens.push(this.COMPOUND_MAP[comp]);
+                ki += len;
+                foundCompound = true;
+                break;
+              }
+            }
+          }
+          if (!foundCompound) {
+            const singleK = kStr[ki];
+            kTokens.push(this.KANJI_MAP[singleK] || singleK);
+            ki++;
           }
         }
+        tokens.push(kTokens.join(''));
+      } else if (punct) {
+        tokens.push(punct);
+      } else if (other) {
+        tokens.push(other);
       }
-      if (matched) continue;
-
-      if (this.KANJI_MAP[char]) {
-        tokens.push(this.KANJI_MAP[char]);
-      } else {
-        tokens.push(wanakana.toRomaji(char));
-      }
-      i++;
     }
 
-    let res = tokens.join(' ').replace(/\s+/g, ' ').trim();
+    let res = tokens.join(' ')
+      .replace(/\s+([,.:;!?])/g, '$1')
+      .replace(/\s+([)\]}’”"'])/g, '$1')
+      .replace(/([(\[{‘“"'])\s+/g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
+
     if (res.length > 0) {
       res = res.charAt(0).toUpperCase() + res.slice(1);
     }

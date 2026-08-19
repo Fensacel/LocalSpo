@@ -101,7 +101,7 @@ export function useDiscordRPC(): void {
     ).then((result: any) => {
       if (cancelled) return;
       if (result && result.content) {
-        const parsed = parseLyrics(result.content, currentSong.artist);
+        const parsed = parseLyrics(result.content, currentSong.artist, currentSong.duration);
         setLyrics(parsed);
       } else {
         setLyrics(null);

@@ -729,10 +729,20 @@ export function registerScannerIpc(getDataPath: () => string): void {
     }
 
     // Priority 4: Cached lyrics
+    if (forceRefresh && fs.existsSync(cachedPath)) {
+      try {
+        fs.unlinkSync(cachedPath);
+      } catch {}
+    }
+
     if (!forceRefresh && fs.existsSync(cachedPath)) {
       const cachedContent = fs.readFileSync(cachedPath, 'utf-8');
       const isSongChinese = /[\u4e00-\u9fa5]/.test(artist || '');
       const cacheHasChinese = /[\u4e00-\u9fa5]{3,}/.test(cachedContent);
+      const isJapaneseTitle = /japanese|\bjapan\b|\bjpn\b|\bjp\s*ver|[\u3040-\u30ff]/i.test(title || '');
+      const cacheHasHangul = /[\uac00-\ud7a3]{3,}/.test(cachedContent);
+      const cacheHasKana = /[\u3040-\u30ff]{3,}/.test(cachedContent);
+      const isLanguageMismatch = isJapaneseTitle && cacheHasHangul && !cacheHasKana;
 
       // Detect garbled/corrupt encoding — replacement chars (U+FFFD) or control chars in first 100 chars
       const hasGarbledChars = /[\ufffd\u0000-\u0008\u000e-\u001f\u007f-\u009f]/.test(cachedContent.slice(0, 200));
@@ -740,10 +750,12 @@ export function registerScannerIpc(getDataPath: () => string): void {
       if (
         hasGarbledChars ||
         (!isSongChinese && cacheHasChinese) ||
+        isLanguageMismatch ||
         cachedContent.startsWith('NO_LYRICS') ||
-        cachedContent.trim().length <= 10
+        cachedContent.trim().length <= 10 ||
+        cachedContent === 'RELOAD'
       ) {
-        console.warn(`[LyricsEngine] Invalidating bad/corrupt cached lyrics for: ${artist} - ${title}`);
+        console.warn(`[LyricsEngine] Invalidating bad/mismatched cached lyrics for: ${artist} - ${title} (language mismatch: ${isLanguageMismatch})`);
         try {
           fs.unlinkSync(cachedPath);
         } catch {}
@@ -752,8 +764,12 @@ export function registerScannerIpc(getDataPath: () => string): void {
         cachedContent.trim().length > 10 &&
         cachedContent !== '[object Object]'
       ) {
-        console.log(`[LyricsEngine] Priority 4 Hit (Disk Cache) for: ${songId}`);
-        return { source: 'cached', content: cleanLrcTags(cachedContent) };
+        const isSynced = /\[\d{1,3}:\d{2}(?:[.,]\d+)?\]/.test(cachedContent);
+        if (isSynced) {
+          console.log(`[LyricsEngine] Priority 4 Hit (Disk Cache Synced) for: ${songId}`);
+          return { source: 'cached', content: cleanLrcTags(cachedContent) };
+        }
+        // If cache is only plain lyrics, we can still return it, but if artist & title exist, try online first for synced upgrade!
       }
     }
 
@@ -764,7 +780,7 @@ export function registerScannerIpc(getDataPath: () => string): void {
         const lyricsRes = await LyricsApi.fetchLyrics(artist, title, album, duration);
 
         if (lyricsRes.syncedLyrics) {
-          console.log(`[LyricsEngine] Priority 5 Hit (LRCLIB Synced) for: ${artist} - ${title}`);
+          console.log(`[LyricsEngine] Priority 5 Hit (Online Synced) for: ${artist} - ${title}`);
           const cleanedText = cleanLrcTags(lyricsRes.syncedLyrics);
           const lyricsDir = path.join(dataPath, 'cache', 'lyrics');
           if (!fs.existsSync(lyricsDir)) fs.mkdirSync(lyricsDir, { recursive: true });
@@ -772,6 +788,7 @@ export function registerScannerIpc(getDataPath: () => string): void {
           return { source: 'lrclib_synced', content: cleanedText };
         }
 
+        // If online plain lyrics found, cache and return
         if (lyricsRes.plainLyrics) {
           console.log(`[LyricsEngine] Priority 6 Hit (Plain Lyrics Provider) for: ${artist} - ${title}`);
           const cleanedText = cleanLrcTags(lyricsRes.plainLyrics);
@@ -785,9 +802,35 @@ export function registerScannerIpc(getDataPath: () => string): void {
       }
     }
 
+    // Fallback: If disk cache had plain lyrics and online query had nothing better, return cached plain
+    if (!forceRefresh && fs.existsSync(cachedPath)) {
+      try {
+        const cachedContent = fs.readFileSync(cachedPath, 'utf-8');
+        if (cachedContent && cachedContent.trim().length > 10 && cachedContent !== 'RELOAD') {
+          return { source: 'cached', content: cleanLrcTags(cachedContent) };
+        }
+      } catch {}
+    }
+
     // Priority 7: No lyrics
     console.log(`[LyricsEngine] Priority 7 (No lyrics found) for: ${artist} - ${title}`);
     return null;
+  });
+
+  // Save custom or user-edited lyrics directly to disk cache
+  ipcMain.handle('lyrics:save', async (_event, songId: string, content: string) => {
+    try {
+      const dataPath = app.getPath('userData');
+      const lyricsDir = path.join(dataPath, 'cache', 'lyrics');
+      if (!fs.existsSync(lyricsDir)) fs.mkdirSync(lyricsDir, { recursive: true });
+      const cachedPath = path.join(lyricsDir, `${songId}.txt`);
+      fs.writeFileSync(cachedPath, cleanLrcTags(content), 'utf-8');
+      console.log(`[LyricsEngine] Custom lyrics saved to cache for: ${songId}`);
+      return { success: true, path: cachedPath };
+    } catch (e: any) {
+      console.error('[LyricsEngine] Failed to save custom lyrics:', e);
+      return { success: false, error: e?.message };
+    }
   });
 
 

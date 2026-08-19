@@ -182,8 +182,18 @@ export function PlaylistDetailPage() {
   };
 
   const handleDeletePlaylist = async () => {
-    if (!id || !localPlaylist) return;
-    await deletePlaylist(id);
+    if (!id && !playlist) return;
+    const targetId = id || playlist?.id;
+    const targetName = playlist?.name;
+
+    if (targetId) {
+      await deletePlaylist(targetId);
+      await followedStore.unfollowPlaylist(targetId);
+    }
+    if (targetName) {
+      await deletePlaylist(targetName);
+      await followedStore.unfollowPlaylist(targetName);
+    }
     navigate('/playlists');
   };
 

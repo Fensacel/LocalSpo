@@ -97,13 +97,8 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
   activeUserId: null,
 
   loadProfile: async (userId?: string | null) => {
-    const targetUserId = userId !== undefined ? userId : get().activeUserId;
+    const targetUserId = (userId !== undefined ? userId : get().activeUserId) || 'guest';
     set({ activeUserId: targetUserId, isLoading: true });
-
-    if (!targetUserId) {
-      set({ profile: null, isLoading: false });
-      return;
-    }
 
     try {
       const data = await UserSyncService.readData<{ profile?: UserProfile }>(
@@ -124,11 +119,12 @@ export const useProfileStore = create<ProfileState>((set, get) => ({
 
   saveProfile: async (updates) => {
     const { activeUserId } = get();
+    const targetUserId = activeUserId || 'guest';
     const current = get().profile ?? DEFAULT_PROFILE;
     const updated = { ...current, ...updates };
     set({ profile: updated });
     try {
-      await UserSyncService.writeData(activeUserId, 'profile', { profile: updated });
+      await UserSyncService.writeData(targetUserId, 'profile', { profile: updated });
     } catch (err) {
       console.error('[ProfileStore] Failed to save profile:', err);
     }

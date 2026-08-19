@@ -58,7 +58,7 @@ export function NowPlayingPanel({ onClose }: NowPlayingPanelProps) {
         if (cancelled) return;
 
         if (result && result.content) {
-          const parsed = parseLyrics(result.content, currentSong.artist);
+          const parsed = parseLyrics(result.content, currentSong.artist, currentSong.duration);
           RomanizationService.clearCache(currentSong.id);
           const processed = await RomanizationService.processLyrics(parsed, currentSong.id, true);
           if (!cancelled) setLyrics(processed || parsed);
